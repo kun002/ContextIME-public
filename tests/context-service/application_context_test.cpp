@@ -34,7 +34,7 @@ std::wstring_view WindowClass(const ApplicationContext& context) {
   return context.window_class.data();
 }
 
-void TestTerminalNormalizationAndSuggestion() {
+void TestTerminalNormalizationAndKeep() {
   const auto context = contextime::BuildApplicationContext(
       101, 202,
       L"C:\\Program Files\\WindowsApps\\WindowsTerminal.EXE",
@@ -56,12 +56,10 @@ void TestTerminalNormalizationAndSuggestion() {
 
   ContextSnapshot snapshot;
   contextime::ApplyApplicationContext(context, snapshot);
-  Expect(snapshot.surface_context.has_value &&
-             snapshot.surface_context.value == InputMode::English,
-         "terminal surface suggests English");
-  Expect(snapshot.application_default.has_value &&
-             snapshot.application_default.value == InputMode::English,
-         "terminal application fallback suggests English");
+  Expect(!snapshot.surface_context.has_value,
+         "terminal surface keeps current mode");
+  Expect(!snapshot.application_default.has_value,
+         "terminal application keeps current mode");
 }
 
 void TestKnownApplicationsDoNotGuessSurface() {
@@ -155,7 +153,7 @@ int main() {
                     std::declval<ContextSnapshot&>())),
                 "application context application must remain noexcept");
 
-  TestTerminalNormalizationAndSuggestion();
+  TestTerminalNormalizationAndKeep();
   TestKnownApplicationsDoNotGuessSurface();
   TestWindowClassFallbackAndCallerPrecedence();
   TestUnavailableAndOversizedInputs();

@@ -57,14 +57,15 @@ UNKNOWN
 TERMINAL
 ```
 
-独立终端 executable 或可靠 console/Windows Terminal window class 被识别为 `TERMINAL`，并只在 request 没有已有 surface/application rule 时填充 English：
+独立终端 executable 或可靠 console/Windows Terminal window class 仍被识别为 `TERMINAL`，供诊断和后续可配置规则使用。当前不再自动填充 surface/application 输入模式：
 
 ```text
-surface_context = ENGLISH
-application_default = ENGLISH
+surface_context = unset
+application_default = unset
+Context Engine = KEEP
 ```
 
-user/project/syntax 规则仍由 Context Engine 以更高优先级处理。调用方已有 surface/application rule 也不会被覆盖。
+这是当前的保守用户体验修正：在 Terminal 规则尚无用户配置开关时，聚焦终端不能强制抢到英文。user/project/syntax 规则仍由 Context Engine 处理，调用方已有规则也不会被覆盖。
 
 VS Code、Visual Studio、JetBrains、浏览器和文档程序只能从 top-level window 判断应用，不能可靠判断 editor/comment/string/terminal/search/chat 等输入区域。因此它们只产生 application kind，surface 保持 `UNKNOWN`，不生成中文/英文建议。
 
@@ -90,7 +91,7 @@ Context Source 不可用时不填任何规则，由原 Context Engine `KEEP` 路
 - terminal executable/class 分类；
 - Code/Visual Studio/JetBrains、browser、document 分类不猜 surface；
 - class-only fallback；
-- caller rule 不被覆盖；
+- terminal 默认 `KEEP` 且 caller rule 不被覆盖；
 - zero PID、空 identity 和 oversized basename 回退；
 - 稳定诊断字符串；
 - normalization/apply 保持 `noexcept`。
@@ -103,7 +104,7 @@ Windows runner 另外调用真实 `GetForegroundWindow` capture，并以固定�
 |---|---|
 | application normalization/classification | `implemented` / `built` / `statically_verified`；双平台 31 assertions |
 | Windows foreground capture | `implemented` / `built` / `runtime_verified`（runner API/bounds） |
-| terminal surface English default | `implemented` / `statically_verified` |
+| terminal classification with default `KEEP` | `implemented` / `statically_verified` |
 | generic input-area recognition | `not_implemented` |
 | VS Code precise surface | `not_started`；M4 Adapter |
 | Context Service 安装/生命周期 | `not_implemented` |

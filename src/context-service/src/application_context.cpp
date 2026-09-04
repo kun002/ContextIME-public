@@ -104,16 +104,11 @@ ApplicationContext BuildApplicationContext(
 
 void ApplyApplicationContext(const ApplicationContext& application,
                              ContextSnapshot& snapshot) noexcept {
-  if (!application.available ||
-      application.surface_kind != SurfaceKind::Terminal) {
-    return;
-  }
-  if (!snapshot.surface_context.has_value) {
-    snapshot.surface_context = OptionalMode::Some(InputMode::English);
-  }
-  if (!snapshot.application_default.has_value) {
-    snapshot.application_default = OptionalMode::Some(InputMode::English);
-  }
+  // Keep application classification available for diagnostics and downstream
+  // context sources, but do not force an input mode until application defaults
+  // are user-configurable.
+  (void)application;
+  (void)snapshot;
 }
 
 const char* ToString(ApplicationKind kind) noexcept {
