@@ -1,0 +1,57 @@
+name: IME Host Context Bridge
+
+on:
+  push:
+    paths:
+      - "src/context-engine/**"
+      - "src/context-service/**"
+      - "src/ime-host/**"
+      - "src/project-indexer/**"
+      - "tests/ime-host/**"
+      - "scripts/run-ime-host-tests.ps1"
+      - "docs/ime-context-bridge.md"
+      - "docs/project-dictionary-candidate-bridge.md"
+      - "docs/evidence/m5-project-candidate-bridge-ci.md"
+      - "docs/evidence/m3-ime-context-bridge-ci.md"
+      - ".github/workflows/ime-host.yml"
+  pull_request:
+    paths:
+      - "src/context-engine/**"
+      - "src/context-service/**"
+      - "src/ime-host/**"
+      - "src/project-indexer/**"
+      - "tests/ime-host/**"
+      - "scripts/run-ime-host-tests.ps1"
+      - "docs/ime-context-bridge.md"
+      - "docs/project-dictionary-candidate-bridge.md"
+      - "docs/evidence/m5-project-candidate-bridge-ci.md"
+      - "docs/evidence/m3-ime-context-bridge-ci.md"
+      - ".github/workflows/ime-host.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-2022
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout ContextIME
+        uses: actions/checkout@v4
+
+      - name: Enter MSVC developer environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile and test IME Host context bridge
+        shell: pwsh
+        run: ./scripts/run-ime-host-tests.ps1

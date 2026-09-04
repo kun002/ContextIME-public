@@ -1,0 +1,47 @@
+name: Context Engine
+
+on:
+  push:
+    paths:
+      - "src/context-engine/**"
+      - "tests/context-engine/**"
+      - "scripts/run-context-engine-tests.ps1"
+      - "docs/context-engine.md"
+      - "docs/evidence/m3-context-engine-core-ci.md"
+      - ".github/workflows/context-engine.yml"
+  pull_request:
+    paths:
+      - "src/context-engine/**"
+      - "tests/context-engine/**"
+      - "scripts/run-context-engine-tests.ps1"
+      - "docs/context-engine.md"
+      - "docs/evidence/m3-context-engine-core-ci.md"
+      - ".github/workflows/context-engine.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-2022
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout ContextIME
+        uses: actions/checkout@v4
+
+      - name: Enter MSVC developer environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile and test Context Engine
+        shell: pwsh
+        run: ./scripts/run-context-engine-tests.ps1

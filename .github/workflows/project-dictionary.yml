@@ -1,0 +1,71 @@
+name: Project Dictionary
+
+on:
+  push:
+    paths:
+      - "src/project-indexer/**"
+      - "src/settings/**"
+      - "tests/project-indexer/**"
+      - "scripts/run-project-indexer-tests.ps1"
+      - "docs/project-dictionary.md"
+      - "docs/project-dictionary-protocol.md"
+      - "docs/project-dictionary-management.md"
+      - "docs/project-dictionary-candidate-bridge.md"
+      - "docs/evidence/m5-project-candidate-bridge-ci.md"
+      - "docs/evidence/m5-project-dictionary-foundation-ci.md"
+      - "docs/evidence/m5-language-server-symbol-ingestion-ci.md"
+      - ".github/workflows/project-dictionary.yml"
+  pull_request:
+    paths:
+      - "src/project-indexer/**"
+      - "src/settings/**"
+      - "tests/project-indexer/**"
+      - "scripts/run-project-indexer-tests.ps1"
+      - "docs/project-dictionary.md"
+      - "docs/project-dictionary-protocol.md"
+      - "docs/project-dictionary-management.md"
+      - "docs/project-dictionary-candidate-bridge.md"
+      - "docs/evidence/m5-project-candidate-bridge-ci.md"
+      - "docs/evidence/m5-project-dictionary-foundation-ci.md"
+      - "docs/evidence/m5-language-server-symbol-ingestion-ci.md"
+      - ".github/workflows/project-dictionary.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-2022
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout ContextIME
+        uses: actions/checkout@v4
+
+      - name: Enter MSVC developer environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile and test Project Dictionary
+        shell: pwsh
+        run: ./scripts/run-project-indexer-tests.ps1
+
+      - name: Upload Windows performance fixture
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-dictionary-performance-${{ github.sha }}
+          path: |
+            artifacts/project-indexer-tests/project-dictionary-performance-tests.exe
+            artifacts/project-indexer-tests/project-dictionary-installed-pressure-tests.exe
+            artifacts/project-indexer-tests/contextime-project-dictionary-manager.exe
+          if-no-files-found: error
+          retention-days: 14

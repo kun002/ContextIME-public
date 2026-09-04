@@ -1,0 +1,9 @@
+[
+  "koffi",
+  "windows-runtime",
+  "PolicyEngine",
+  "HabitLearner",
+  "SurfaceModeMemory",
+  "SwitchGuard",
+  "createWindowsImeRuntime"
+]

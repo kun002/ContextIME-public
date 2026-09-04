@@ -1,0 +1,440 @@
+name: ContextIME Native Preview 0.3.1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-contextime-preview-0-3-1:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      BOOST_ROOT: ${{ github.workspace }}\_upstream\weasel\deps\boost_1_84_0
+      SDKVER: 10.0.19041.0
+
+    steps:
+      - name: Checkout ContextIME
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Read fixed upstream identity
+        id: identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $identity = Get-Content native/contextime.identity.json -Raw | ConvertFrom-Json
+          if ($identity.product.version -ne '0.3.1-preview') {
+            throw "Identity version mismatch: $($identity.product.version)"
+          }
+          if ($identity.product.numericVersion -ne '0.3.1.0') {
+            throw "Identity numeric version mismatch: $($identity.product.numericVersion)"
+          }
+          if ($identity.directories.installLeaf -ne 'contextime-0.3.1-preview') {
+            throw "Identity install directory mismatch: $($identity.directories.installLeaf)"
+          }
+          "weasel_sha=$($identity.upstream.weaselCommit)" >> $env:GITHUB_OUTPUT
+          "weasel_version=$($identity.upstream.weaselVersion)" >> $env:GITHUB_OUTPUT
+          "librime_sha=$($identity.upstream.librimeCommit)" >> $env:GITHUB_OUTPUT
+          "librime_version=$($identity.upstream.librimeVersion)" >> $env:GITHUB_OUTPUT
+
+      - name: Compile real TSF smoke tool
+        shell: pwsh
+        run: >-
+          ./native/scripts/run-contextime-tsf-smoke.ps1
+          -SequencePath native/tests/tsf-smoke/fixtures/m2-mixed-input.json
+          -ForceBuild
+          -CompileOnly
+
+      - name: Checkout pinned Weasel
+        uses: actions/checkout@v4
+        with:
+          repository: rime/weasel
+          ref: ${{ steps.identity.outputs.weasel_sha }}
+          path: _upstream/weasel
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+          show-progress: false
+
+      - name: Verify exact upstream commits
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $weasel = (git -C _upstream/weasel rev-parse HEAD).Trim()
+          $librime = (git -C _upstream/weasel/librime rev-parse HEAD).Trim()
+          if ($weasel -ne '${{ steps.identity.outputs.weasel_sha }}') { throw "Weasel SHA mismatch: $weasel" }
+          if ($librime -ne '${{ steps.identity.outputs.librime_sha }}') { throw "librime SHA mismatch: $librime" }
+          @(
+            "weasel=$weasel",
+            "librime=$librime",
+            "runner=$env:ImageOS",
+            "image=$env:ImageVersion"
+          ) | Set-Content contextime-upstream-commits.txt
+
+      - name: Apply ContextIME identity and runtime fixes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./native/scripts/normalize-weasel-0.17.4.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-identity.ps1 `
+            -WeaselRoot _upstream/weasel `
+            -IdentityPath native/contextime.identity.json `
+            -ReportPath contextime-identity-report.json
+          ./native/scripts/apply-contextime-0.1.1-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.1.2-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.1.3-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.0-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.1-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.2-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.3-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-m3-ime-context-bridge.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.3.0-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.3.1-fixes.ps1 -WeaselRoot _upstream/weasel
+          git -C _upstream/weasel add -N -- include/contextime WeaselTSF/ContextIME
+          git -C _upstream/weasel diff --check
+          git -C _upstream/weasel diff --stat
+          git -C _upstream/weasel diff | Set-Content contextime-weasel-0.3.1.patch -Encoding utf8
+
+      - name: Configure Visual Studio 2022 build
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: Copy-Item env.vs2022.bat env.bat -Force
+
+      - name: Cache Boost 1.84.0
+        id: cache-boost
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_ROOT }}
+          key: native-ime-${{ runner.os }}-boost-1.84.0-v143
+
+      - name: Install and build Boost
+        if: steps.cache-boost.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: _upstream/weasel
+        run: |
+          ./install_boost.bat
+          ./build.bat boost
+
+      - name: Enter MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          sdk: ${{ env.SDKVER }}
+
+      - name: Build and exercise Context Service lifecycle
+        shell: pwsh
+        run: >-
+          ./scripts/run-context-service-tests.ps1
+          -OutputDirectory artifacts/context-service-runtime
+
+      - name: Re-run canonical IME bridge fixtures
+        shell: pwsh
+        run: ./scripts/run-ime-host-tests.ps1
+
+      - name: Download pinned librime development assets
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: .\get-rime.ps1 -tag '${{ steps.identity.outputs.librime_version }}' -use dev
+
+      - name: Build and patch Rime data
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Push-Location _upstream/weasel
+          try { .\build.bat data } finally { Pop-Location }
+          ./native/scripts/apply-contextime-0.1.3-data.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.0-data.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.1-data.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.2-data.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.3-data.ps1 -WeaselRoot _upstream/weasel
+
+      - name: Build patched native frontend
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:RELEASE_BUILD = '1'
+          .\build.bat
+
+      - name: Stage isolated system DLL and IME filenames
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fileMap = [ordered]@{
+            'weasel.dll' = 'contextime.dll'
+            'weaselx64.dll' = 'contextimex64.dll'
+            'weaselARM.dll' = 'contextimeARM.dll'
+            'weaselARM64.dll' = 'contextimeARM64.dll'
+            'weaselARM64X.dll' = 'contextimeARM64X.dll'
+            'weasel.ime' = 'contextime.ime'
+            'weaselx64.ime' = 'contextimex64.ime'
+            'weaselARM.ime' = 'contextimeARM.ime'
+            'weaselARM64.ime' = 'contextimeARM64.ime'
+            'weaselARM64X.ime' = 'contextimeARM64X.ime'
+          }
+          foreach ($entry in $fileMap.GetEnumerator()) {
+            $source = Join-Path output $entry.Key
+            if (Test-Path $source) { Copy-Item $source (Join-Path output $entry.Value) -Force }
+          }
+          foreach ($required in @('contextime.dll', 'contextimex64.dll', 'contextime.ime', 'contextimex64.ime')) {
+            if (-not (Test-Path (Join-Path output $required))) { throw "Missing isolated system file: $required" }
+          }
+
+      - name: Stage Context Service companion executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item `
+            artifacts/context-service-runtime/contextime-context-service.exe `
+            _upstream/weasel/output/contextime-context-service.exe `
+            -Force
+          if (-not (Test-Path _upstream/weasel/output/contextime-context-service.exe -PathType Leaf)) {
+            throw 'Context Service companion executable was not staged.'
+          }
+
+      - name: Build ContextIME 0.3.1 installer
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\Bin\makensis.exe"
+          if (-not (Test-Path $makensis)) { throw "NSIS not found: $makensis" }
+          & $makensis `
+            '/DWEASEL_VERSION=${{ steps.identity.outputs.weasel_version }}' `
+            '/DWEASEL_BUILD=0' `
+            '/DPRODUCT_VERSION=${{ steps.identity.outputs.weasel_version }}.0' `
+            output\install.nsi
+          if ($LASTEXITCODE -ne 0) { throw "NSIS failed with exit code $LASTEXITCODE" }
+
+      - name: Verify installer archive file manifest
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Resolve-Path 'output/archives/contextime-0.3.1-preview-installer.exe').Path
+          $sandbox = Join-Path $env:RUNNER_TEMP 'contextime-0.3.1-manifest'
+          New-Item -ItemType Directory -Path $sandbox -Force | Out-Null
+          $sevenZip = (Resolve-Path 'output/7z.exe').Path
+          $manifest = (& $sevenZip l -slt $installer | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Installer manifest listing failed with exit code $LASTEXITCODE."
+          }
+          foreach ($relative in @(
+            'contextime-context-service.exe'
+            'data/contextime_developer.schema.yaml'
+            'data/rime.lua'
+          )) {
+            if (-not [regex]::IsMatch($manifest, "(?m)^Path = $([regex]::Escape($relative.Replace('/', '\')))\r?`$")) {
+              throw "Installer manifest omitted required shared data: $relative"
+            }
+          }
+          & $sevenZip e $installer "-o$sandbox" 'data\rime.lua' -y | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Installer rime.lua extraction failed with exit code $LASTEXITCODE."
+          }
+          $packagedLua = Get-FileHash 'output/data/rime.lua' -Algorithm SHA256
+          $installedLua = Get-FileHash (Join-Path $sandbox 'rime.lua') -Algorithm SHA256
+          if ($packagedLua.Hash -ne $installedLua.Hash) {
+            throw 'Installed rime.lua differs from the audited build output.'
+          }
+
+      - name: Audit developer native package and collect evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-Item _upstream/weasel/output/archives/contextime-0.3.1-preview-installer.exe
+          $hash = Get-FileHash $installer.FullName -Algorithm SHA256
+          $contextService = Get-Item _upstream/weasel/output/contextime-context-service.exe
+          $contextServiceHash = Get-FileHash $contextService.FullName -Algorithm SHA256
+          $identityReport = Get-Content contextime-identity-report.json -Raw | ConvertFrom-Json
+          if ($identityReport.product.version -ne '0.3.1-preview' -or
+              $identityReport.product.numericVersion -ne '0.3.1.0' -or
+              $identityReport.directories.installLeaf -ne 'contextime-0.3.1-preview') {
+            throw 'Generated identity report does not describe ContextIME 0.3.1.'
+          }
+          $lifecycleReport = Get-Content contextime-0.3.1-fix-report.json -Raw | ConvertFrom-Json
+          if ($lifecycleReport.windowsServiceManagerUsed -or
+              $lifecycleReport.contextServiceOnKeyPath -or
+              -not $lifecycleReport.realWindowsVerificationRequired) {
+            throw 'Context Service lifecycle report violates the rollout boundary.'
+          }
+          $serverSource = Get-Content _upstream/weasel/WeaselIPCServer/WeaselServerImpl.cpp -Raw
+          if (-not $serverSource.Contains('(CONTEXTIME)NativeServer-')) { throw 'ContextIME server mutex is missing.' }
+          if ($serverSource.Contains('(WEASEL)Furandōru-Sukāretto-')) { throw 'Upstream Weasel server mutex remains.' }
+          $setupSource = Get-Content _upstream/weasel/WeaselSetup/imesetup.cpp -Raw
+          if ($setupSource.Contains('Software\\Rime\\Weasel')) { throw 'ContextIME uninstall still depends on the Weasel user registry.' }
+          if (-not $setupSource.Contains('(*pfnInstallLayoutOrTip)(PSZTITLE_HANS, ILOT_UNINSTALL);') -or
+              -not $setupSource.Contains('(*pfnInstallLayoutOrTip)(PSZTITLE_HANT, ILOT_UNINSTALL);')) {
+            throw 'ContextIME does not remove both language profiles during uninstall.'
+          }
+          $tsfRegisterSource = Get-Content _upstream/weasel/WeaselTSF/Register.cpp -Raw
+          if ($tsfRegisterSource.Contains('Microsft\\CTF\\TIP') -or
+              -not $tsfRegisterSource.Contains('RecurseDeleteKeyA(HKEY_LOCAL_MACHINE, tipKey);') -or
+              -not $tsfRegisterSource.Contains('RecurseDeleteKeyA(HKEY_CURRENT_USER, tipKey);')) {
+            throw 'ContextIME TIP registry cleanup is incomplete.'
+          }
+          $defaultData = Get-Content _upstream/weasel/output/data/default.yaml -Raw
+          if (-not [regex]::IsMatch($defaultData, '(?ms)^schema_list:\s*\r?\n\s*- schema: contextime_developer(?:\r?\n|$)')) {
+            throw 'Packaged default schema is not contextime_developer.'
+          }
+          if ([regex]::IsMatch($defaultData, '(?m)^\s*- schema: quick5\s*$')) { throw 'Unavailable quick5 remains packaged.' }
+          foreach ($schemaFile in @('luna_pinyin_simp.schema.yaml', 'contextime_developer.schema.yaml', 'rime.lua')) {
+            if (-not (Test-Path (Join-Path '_upstream/weasel/output/data' $schemaFile))) {
+              throw "Required packaged schema is missing: $schemaFile"
+            }
+          }
+          $developerSchema = Get-Content _upstream/weasel/output/data/contextime_developer.schema.yaml -Raw
+          foreach ($requiredLiteral in @(
+            '__include: luna_pinyin_simp.schema:/'
+            'schema_id: contextime_developer'
+            'prism: contextime_developer'
+            '- contextime_developer.custom:/patch?'
+            'version: "0.2.3"'
+            'lua_processor@contextime_command_processor'
+            'lua_translator@contextime_command_translator'
+            'contextime_command:'
+            'command_fragments:'
+            'enabled: true'
+            '^(git|npm|dotnet|cargo|cd)( .*)?$'
+            "([A-Z][-_+.'0-9A-Za-z]*|[a-z][0-9a-z]*[A-Z][0-9A-Za-z]*|[a-z][0-9A-Za-z]*_[0-9A-Za-z_-]*|^[A-Za-z]:(?:[\\/][0-9A-Za-z_.+\\/-]*)?|^(?:[0-9A-Za-z_+-][0-9A-Za-z_.+-]*[\\/])+[0-9A-Za-z_.+\\/-]*)`$"
+          )) {
+            if (-not $developerSchema.Contains($requiredLiteral)) {
+              throw "Developer schema audit failed: $requiredLiteral"
+            }
+          }
+          $commandLua = Get-Content _upstream/weasel/output/data/rime.lua -Raw
+          foreach ($requiredLiteral in @(
+            'config:get_bool("contextime/command_fragments/enabled")'
+            'config:get_list("contextime/command_fragments/roots")'
+            'function contextime_command_processor(key, env)'
+            'function contextime_command_translator(input, segment, env)'
+            'env.engine:commit_text(command)'
+          )) {
+            if (-not $commandLua.Contains($requiredLiteral)) {
+              throw "Packaged command Lua audit failed: $requiredLiteral"
+            }
+          }
+          if ($commandLua.Contains('contextime_command_mode')) {
+            throw 'Packaged command Lua retains command mode outside the current composition.'
+          }
+          $installerScript = Get-Content _upstream/weasel/output/install.nsi -Raw
+          $installerBytes = [System.IO.File]::ReadAllBytes((Resolve-Path '_upstream/weasel/output/install.nsi'))
+          if ($installerBytes.Length -lt 3 -or
+              $installerBytes[0] -ne 0xEF -or
+              $installerBytes[1] -ne 0xBB -or
+              $installerBytes[2] -ne 0xBF) {
+            throw 'Localized NSIS script is not UTF-8 with BOM.'
+          }
+          foreach ($required in @(
+            'ContextIME 0.3.1 Preview',
+            'contextime-0.3.1-preview-installer.exe',
+            'File "data\rime.lua"',
+            'File "contextime-context-service.exe"',
+            'ContextIMEContextService',
+            'contextime-context-service.exe" --quit',
+            'ExecWait ''"$INSTDIR\WeaselServer.exe" /nascii'''
+          )) {
+            if (-not $installerScript.Contains($required)) { throw "Installer audit missing: $required" }
+          }
+          foreach ($token in @(
+            'Software\Rime\Weasel',
+            'SOFTWARE\Rime\Weasel',
+            'Uninstall\Weasel',
+            'DeleteRegKey HKLM SOFTWARE\Rime',
+            '$PROGRAMFILES64\Rime',
+            '$PROGRAMFILES\Rime',
+            'archives\weasel-'
+          )) {
+            if ($installerScript.Contains($token)) { throw "Installer isolation audit failed: $token" }
+          }
+          foreach ($relative in @(
+            'WeaselDeployer/WeaselDeployer.rc',
+            'WeaselServer/WeaselServer.rc',
+            'WeaselSetup/WeaselSetup.rc',
+            'WeaselTSF/WeaselTSF.rc',
+            'WeaselIME/WeaselIME.rc'
+          )) {
+            $bytes = [System.IO.File]::ReadAllBytes((Join-Path '_upstream/weasel' $relative))
+            if ($bytes.Length -lt 2 -or $bytes[0] -ne 0xFF -or $bytes[1] -ne 0xFE) {
+              throw "Packaged resource is not UTF-16LE: $relative"
+            }
+          }
+          [PSCustomObject]@{
+            file = $installer.Name
+            bytes = $installer.Length
+            sha256 = $hash.Hash.ToLowerInvariant()
+            product = 'ContextIME'
+            version = '0.3.1-preview'
+            defaultSchema = 'contextime_developer'
+            serverMutex = '(CONTEXTIME)NativeServer-<username>'
+            contextService = [PSCustomObject]@{
+              file = $contextService.Name
+              bytes = $contextService.Length
+              sha256 = $contextServiceHash.Hash.ToLowerInvariant()
+              pipe = 'ContextIME.ContextService.v1'
+              mutex = 'Local\ContextIME.ContextService.Singleton.v1'
+              stopEvent = 'Local\ContextIME.ContextService.Stop.v1'
+              autorun = 'ContextIMEContextService'
+            }
+            weasel = '${{ steps.identity.outputs.weasel_sha }}'
+            librime = '${{ steps.identity.outputs.librime_sha }}'
+          } | ConvertTo-Json -Depth 4 | Set-Content contextime-0.3.1-installer-hash.json
+          Get-Command cl, msbuild, cmake | Select-Object Name, Source | Format-Table -AutoSize | Out-String | Set-Content contextime-toolchain.txt
+          cl 2>&1 | Add-Content contextime-toolchain.txt
+          cmake --version | Add-Content contextime-toolchain.txt
+          Get-Content contextime-upstream-commits.txt, contextime-identity-report.json, contextime-0.1.3-fix-report.json, contextime-0.1.3-data-report.json, contextime-0.2.0-fix-report.json, contextime-0.2.0-data-report.json, contextime-0.2.1-fix-report.json, contextime-0.2.1-data-report.json, contextime-0.2.2-fix-report.json, contextime-0.2.2-data-report.json, contextime-0.2.3-fix-report.json, contextime-0.2.3-data-report.json, contextime-0.3.0-fix-report.json, contextime-0.3.1-fix-report.json, contextime-0.3.1-installer-hash.json
+
+      - name: Upload ContextIME 0.3.1 preview and source evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextime-native-0.3.1-preview
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            _upstream/weasel/output/archives/contextime-0.3.1-preview-installer.exe
+            _upstream/weasel/output/LICENSE.txt
+            _upstream/weasel/output/README.txt
+            artifacts/native-tools/contextime-tsf-smoke.exe
+            native/contextime.identity.json
+            native/data/contextime_developer-0.2.0.schema.yaml
+            native/data/contextime_developer-0.2.1.schema.yaml
+            native/data/contextime_developer-0.2.2.schema.yaml
+            native/data/contextime_developer.schema.yaml
+            native/data/rime.lua
+            native/scripts/apply-contextime-0.2.2-fixes.ps1
+            native/scripts/apply-contextime-0.2.2-data.ps1
+            native/scripts/apply-contextime-0.2.3-fixes.ps1
+            native/scripts/apply-contextime-0.2.3-data.ps1
+            native/scripts/apply-contextime-m3-ime-context-bridge.ps1
+            native/scripts/apply-contextime-0.3.0-fixes.ps1
+            native/scripts/apply-contextime-0.3.1-fixes.ps1
+            native/patches/m3-ime-context-bridge/ContextBridge.cpp
+            src/context-engine/
+            src/context-service/
+            src/ime-host/
+            native/scripts/run-contextime-tsf-smoke.ps1
+            native/tests/tsf-smoke/ContextIMETsfSmoke.cs
+            native/tests/tsf-smoke/fixtures/m2-mixed-input.json
+            contextime-upstream-commits.txt
+            contextime-identity-report.json
+            contextime-0.1.1-fix-report.json
+            contextime-0.1.2-fix-report.json
+            contextime-0.1.3-fix-report.json
+            contextime-0.1.3-data-report.json
+            contextime-0.2.0-fix-report.json
+            contextime-0.2.0-data-report.json
+            contextime-0.2.1-fix-report.json
+            contextime-0.2.1-data-report.json
+            contextime-0.2.2-fix-report.json
+            contextime-0.2.2-data-report.json
+            contextime-0.2.3-fix-report.json
+            contextime-0.2.3-data-report.json
+            contextime-0.3.0-fix-report.json
+            contextime-0.3.1-fix-report.json
+            contextime-weasel-0.3.1.patch
+            contextime-0.3.1-installer-hash.json
+            contextime-toolchain.txt

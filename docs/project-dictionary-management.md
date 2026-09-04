@@ -1,0 +1,85 @@
+# ContextIME 项目词库管理（M5.4）
+
+## 目标与边界
+
+M5.4 为已经由 Language Server 采集并持久化的项目词库提供本地查看、
+启用、禁用和整库删除入口。它不增加 symbol 数据源，不扫描项目，也不在
+TSF 按键、composition、candidate 或 commit 热路径读取磁盘或执行 IPC。
+
+```text
+contextime-project-dictionary-manager.exe
+        ↓ bounded CIPM request/response
+\\.\pipe\ContextIME.ProjectIndexer.v1
+        ↓ existing Project Indexer background owner
+ProjectDictionaryStore
+        ↓ publish/clear after mutation
+active-project immutable snapshot
+```
+
+管理程序不直接打开 `%APPDATA%\ContextIME\project-dictionaries`。所有文件
+操作继续由 Context Service 内已有的 Project Indexer 后台线程串行执行，避免
+UI、Adapter 和候选桥同时拥有 Store。
+
+## 用户界面
+
+原生 Win32 单窗口提供：
+
+- 匿名 128-bit project ID 列表；
+- 每页最多 100 条的词条查看；
+- symbol、类型、来源、频次和最后更新时间；
+- 启用或禁用选中词库；
+- 带二次确认的整库删除；
+- 项目刷新和词条翻页。
+
+项目路径从未写入词库或管理协议，所以管理程序只显示 opaque project ID，
+不会尝试反推出 workspace 路径。当前没有增加项目别名或其他元数据。
+
+禁用保留词库文件和记录，并立即为仍处于 active lease 的同项目发布空候选
+snapshot。重新启用会从已持久化 snapshot 恢复项目候选。删除会移除项目文件
+及临时文件，并立即清除匹配的 active snapshot。仍打开的编辑器在后续 symbol
+采集事件中可以重新建立已删除词库；这是“删除当前索引数据”而不是永久屏蔽
+该 workspace，永久停止候选应使用禁用。
+
+## CIPM v1
+
+管理调用与 Adapter 的 `CIPD` upsert 共用同一条 Project Indexer Pipe 和同一
+后台 owner，但使用独立 magic `CIPM`。Server 读到固定 4096-byte request 后
+按 magic 分流：
+
+- `CIPD` 保持既有 4096-byte request / 32-byte response，不改变 Adapter；
+- `CIPM` 使用 4096-byte request / 32768-byte response；
+- 两者都必须在完整 response 后发送 ACK `0x06`；
+- list 每页最多 512 个 project ID；
+- view 每页最多 128 个词条；
+- client 的 open/write/read/ACK 共用一个 5 秒 UI deadline；
+- Pipe 仍由 server 使用当前用户与 `SYSTEM` DACL 及
+  `PIPE_REJECT_REMOTE_CLIENTS` 创建。
+
+`CIPM` 只能承载 project ID、enabled、分页游标以及既有词条模型：
+
+```text
+symbol / symbol_type / source / frequency / last_seen
+```
+
+它没有 workspace path、URI、源码、range、detail、container、输入正文、密码、
+Token、API Key 或环境变量字段。
+
+## 故障回退
+
+Context Service 不存在、Pipe busy、超时、断开、协议错误、词库损坏或 I/O 失败
+时，管理窗口只显示诊断状态。失败不会修改 IME 状态，也不会进入输入线程。
+项目候选桥失败时仍按 M5.3 规则清空项目 property；普通 librime 拼音 translator
+继续工作。
+
+## 验证分层
+
+- `implemented`：CIPM codec、Windows client/server、Win32 UI、active snapshot
+  mutation semantics 和安装器接线；
+- `built`：必须通过 Windows MSVC `/W4 /WX` 和 Ubuntu g++
+  `-Wall -Wextra -Werror -pedantic`；
+- `CI`：固定 codec、真实 Windows local Named Pipe、列表/分页/禁用/启用/删除、
+  active immutable snapshot 更新及安装包 manifest；
+- `real_machine_verified`：必须在登录且解锁的 Windows 交互桌面从安装后的开始
+  菜单入口完成查看、禁用、启用和测试词库删除，同时回归普通拼音 fail-open。
+
+在最后一项完成前标记 `REAL_WINDOWS_VERIFICATION_REQUIRED`。

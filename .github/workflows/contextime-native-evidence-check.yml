@@ -1,0 +1,67 @@
+name: ContextIME Native Evidence Check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "native/contextime.identity.json"
+      - "native/scripts/collect-contextime-native-evidence.ps1"
+      - ".github/workflows/contextime-native-evidence-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  clean-runner-evidence:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Parse native evidence collector
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'native/scripts/collect-contextime-native-evidence.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List * -Force
+            throw "PowerShell parser found $($errors.Count) error(s)."
+          }
+
+      - name: Verify clean ContextIME state collection
+        shell: pwsh
+        run: |
+          ./native/scripts/collect-contextime-native-evidence.ps1 `
+            -ExpectedState Uninstalled `
+            -OutputDirectory artifacts/native-evidence `
+            -FailOnMismatch
+
+      - name: Verify reference snapshot comparison
+        shell: pwsh
+        run: |
+          $reference = Get-ChildItem artifacts/native-evidence/contextime-native-evidence.json -Recurse |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $reference) { throw 'The reference native evidence report is missing.' }
+          ./native/scripts/collect-contextime-native-evidence.ps1 `
+            -ExpectedState Uninstalled `
+            -ReferenceReportPath $reference.FullName `
+            -OutputDirectory artifacts/native-reference-comparison `
+            -FailOnMismatch
+
+      - name: Upload evidence diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextime-native-clean-runner-evidence
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            artifacts/native-evidence
+            artifacts/native-reference-comparison

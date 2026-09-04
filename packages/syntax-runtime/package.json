@@ -1,0 +1,11 @@
+{
+  "name": "@context-ime/syntax-runtime",
+  "version": "0.4.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "dependencies": {
+    "@vscode/tree-sitter-wasm": "0.3.1"
+  }
+}

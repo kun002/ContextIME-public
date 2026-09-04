@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+artifacts/
+*.tsbuildinfo
+*.vsix
+coverage/
+.DS_Store
+Thumbs.db
+*.log

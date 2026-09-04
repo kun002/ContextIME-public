@@ -1,0 +1,41 @@
+{
+  "Name": "m2-mixed-input",
+  "Steps": [
+    {
+      "Name": "simplified-chinese-prefix",
+      "Input": "nihao",
+      "SelectionKey": "space",
+      "ExpectedCommit": "你好"
+    },
+    {
+      "Name": "technical-identifier",
+      "Input": "GameObject",
+      "SelectionKey": "space",
+      "ExpectedCommit": "GameObject"
+    },
+    {
+      "Name": "path",
+      "Input": "Assets/Textures/UI",
+      "SelectionKey": "space",
+      "ExpectedCommit": "Assets/Textures/UI"
+    },
+    {
+      "Name": "url",
+      "Input": "https://github.com",
+      "SelectionKey": "space",
+      "ExpectedCommit": "https://github.com"
+    },
+    {
+      "Name": "command",
+      "Input": "git status && npm test",
+      "SelectionKey": "enter",
+      "ExpectedCommit": "git status && npm test"
+    },
+    {
+      "Name": "simplified-chinese-recovery",
+      "Input": "shurufa",
+      "SelectionKey": "space",
+      "ExpectedCommit": "输入法"
+    }
+  ]
+}

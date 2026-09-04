@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "product": {
+    "name": "ContextIME",
+    "channel": "preview",
+    "version": "0.5.2-preview",
+    "numericVersion": "0.5.2.0",
+    "publisher": "ContextIME Project",
+    "homepage": "https://github.com/kun002/ContextIME-public"
+  },
+  "upstream": {
+    "weaselVersion": "0.17.4",
+    "weaselCommit": "9cc96e20dc71b80876b12f689bb5863c76c2a7ed",
+    "librimeVersion": "1.13.1",
+    "librimeCommit": "1c23358157934bd6e6d6981f0c0164f05393b497"
+  },
+  "guids": {
+    "textService": "9FA3541F-F3F9-4C67-AA42-6C9AB15FB6A9",
+    "profile": "A200BA94-B1A7-4668-A22B-CA61EC1E79F7",
+    "languageBar": "DF0D40FA-1985-4903-AC4B-2D78FA06A899",
+    "displayAttribute": "ACE600A5-5CD4-49C1-8A21-C790C745CDD3",
+    "inputMode": "4E48572E-A53C-4F59-873C-7567004C5DD1",
+    "preservedKey": "DB27302D-DCAC-414C-BE1F-FF0A77CABC1B"
+  },
+  "registry": {
+    "machineRoot": "Software\\ContextIME",
+    "userRoot": "Software\\ContextIME",
+    "uninstallKey": "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ContextIME",
+    "autorunValue": "ContextIMEServer",
+    "contextServiceAutorunValue": "ContextIMEContextService"
+  },
+  "directories": {
+    "programRoot": "ContextIME",
+    "installLeaf": "contextime-0.5.2-preview",
+    "userData": "%APPDATA%\\ContextIME",
+    "log": "%TEMP%\\contextime"
+  },
+  "runtime": {
+    "systemFileBase": "contextime",
+    "ipcWindow": "ContextIMEIPCWindow_1.0",
+    "ipcPipe": "ContextIMENamedPipe",
+    "deployerMutex": "ContextIMEDeployerMutex",
+    "deployerExclusiveMutex": "ContextIMEDeployerExclusiveMutex",
+    "serviceName": "ContextIMEInputService",
+    "rimeAppName": "contextime.ime",
+    "contextServiceExecutable": "contextime-context-service.exe",
+    "contextServicePipe": "ContextIME.ContextService.v1",
+    "projectIndexerPipe": "ContextIME.ProjectIndexer.v1",
+    "projectCandidatePipe": "ContextIME.ProjectCandidate.v1",
+    "contextServiceMutex": "Local\\ContextIME.ContextService.Singleton.v1",
+    "contextServiceStopEvent": "Local\\ContextIME.ContextService.Stop.v1"
+  }
+}

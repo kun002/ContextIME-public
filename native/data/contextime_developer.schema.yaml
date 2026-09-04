@@ -1,0 +1,39 @@
+# Rime schema
+# encoding: utf-8
+
+__include: luna_pinyin_simp.schema:/
+
+# ContextIME owns developer-specific recognition while inheriting librime's
+# mature simplified full-pinyin composition, dictionaries and user learning.
+__patch:
+  - "engine/processors/@before 0": lua_processor@contextime_command_processor
+  - "engine/translators/@before 0": lua_translator@contextime_command_translator
+  - "engine/translators/@before 0": lua_translator@contextime_project_translator
+  - recognizer/patterns/uppercase: >-
+      ([A-Z][-_+.'0-9A-Za-z]*|[a-z][0-9a-z]*[A-Z][0-9A-Za-z]*|[a-z][0-9A-Za-z]*_[0-9A-Za-z_-]*|^[A-Za-z]:(?:[\\/][0-9A-Za-z_.+\\/-]*)?|^(?:[0-9A-Za-z_+-][0-9A-Za-z_.+-]*[\\/])+[0-9A-Za-z_.+\\/-]*)$
+  - recognizer/patterns/contextime_command: >-
+      ^(git|npm|dotnet|cargo|cd)( .*)?$
+  - contextime_developer.custom:/patch?
+
+schema:
+  schema_id: contextime_developer
+  name: ContextIME·开发者
+  version: "0.5.0"
+  author:
+    - ContextIME Project
+  description: |
+    ContextIME 开发者默认方案。
+    继承朙月拼音简化字方案，并支持技术标识符、常用路径、命令片段和当前项目符号候选。
+
+contextime:
+  command_fragments:
+    enabled: true
+    roots:
+      - git
+      - npm
+      - dotnet
+      - cargo
+      - cd
+
+translator:
+  prism: contextime_developer

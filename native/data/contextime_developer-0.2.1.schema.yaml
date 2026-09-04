@@ -1,0 +1,24 @@
+# Rime schema
+# encoding: utf-8
+
+__include: luna_pinyin_simp.schema:/
+
+# ContextIME owns developer-specific recognition while inheriting librime's
+# mature simplified full-pinyin composition, dictionaries and user learning.
+__patch:
+  - recognizer/patterns/uppercase: >-
+      ([A-Z][-_+.'0-9A-Za-z]*|[a-z][0-9a-z]*[A-Z][0-9A-Za-z]*|[a-z][0-9A-Za-z]*_[0-9A-Za-z_-]*|^[A-Za-z]:(?:[\\/][0-9A-Za-z_.+\\/-]*)?|^(?:[0-9A-Za-z_+-][0-9A-Za-z_.+-]*[\\/])+[0-9A-Za-z_.+\\/-]*)$
+  - contextime_developer.custom:/patch?
+
+schema:
+  schema_id: contextime_developer
+  name: ContextIME·开发者
+  version: "0.2.1"
+  author:
+    - ContextIME Project
+  description: |
+    ContextIME 开发者默认方案。
+    继承朙月拼音简化字方案，并支持技术标识符和常用路径临时英文上屏。
+
+translator:
+  prism: contextime_developer

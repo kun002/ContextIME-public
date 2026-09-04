@@ -1,0 +1,84 @@
+name: ContextIME Identity Patch Check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "native/contextime.identity.json"
+      - "native/scripts/apply-contextime-identity.ps1"
+      - "native/scripts/normalize-weasel-0.17.4.ps1"
+      - ".github/workflows/contextime-identity-patch-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  patch-check:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Checkout ContextIME
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Read upstream commit
+        id: identity
+        shell: pwsh
+        run: |
+          $identity = Get-Content native/contextime.identity.json -Raw | ConvertFrom-Json
+          "weasel_sha=$($identity.upstream.weaselCommit)" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout pinned Weasel
+        uses: actions/checkout@v4
+        with:
+          repository: rime/weasel
+          ref: ${{ steps.identity.outputs.weasel_sha }}
+          path: _upstream/weasel
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Apply identity patch with diagnostics
+        id: patch
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            ./native/scripts/normalize-weasel-0.17.4.ps1 `
+              -WeaselRoot _upstream/weasel
+            ./native/scripts/apply-contextime-identity.ps1 `
+              -WeaselRoot _upstream/weasel `
+              -IdentityPath native/contextime.identity.json `
+              -ReportPath contextime-identity-report.json
+            git -C _upstream/weasel diff --check
+            git -C _upstream/weasel diff --stat | Set-Content contextime-identity-diff-stat.txt
+            'success' | Set-Content contextime-identity-result.txt
+          } catch {
+            $_ | Format-List * -Force | Out-String | Set-Content contextime-identity-error.txt
+            $_.ScriptStackTrace | Set-Content contextime-identity-stack.txt
+            'failure' | Set-Content contextime-identity-result.txt
+          }
+
+      - name: Upload patch diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextime-identity-patch-diagnostics
+          if-no-files-found: warn
+          retention-days: 3
+          path: |
+            contextime-identity-result.txt
+            contextime-identity-error.txt
+            contextime-identity-stack.txt
+            contextime-identity-report.json
+            contextime-identity-diff-stat.txt
+
+      - name: Fail when patch failed
+        shell: pwsh
+        run: |
+          if ((Get-Content contextime-identity-result.txt -Raw).Trim() -ne 'success') {
+            if (Test-Path contextime-identity-error.txt) { Get-Content contextime-identity-error.txt }
+            throw 'ContextIME identity patch failed. See diagnostic artifact.'
+          }

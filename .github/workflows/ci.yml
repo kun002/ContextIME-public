@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "agent/**"]
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        shell: bash
+        run: npm install --ignore-scripts
+      - name: Typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee typecheck.log
+      - name: Tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee tests.log
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diagnostics-${{ matrix.os }}
+          path: |
+            typecheck.log
+            tests.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package-windows:
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build dependencies
+        shell: bash
+        run: npm install --ignore-scripts
+      - name: Build Windows VSIX
+        shell: bash
+        run: npm run package:vsix
+      - name: Upload Windows VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: context-ime-win32-x64-vsix
+          path: artifacts/*.vsix
+          if-no-files-found: error
+          retention-days: 14

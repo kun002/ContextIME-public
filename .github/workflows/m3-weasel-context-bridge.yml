@@ -1,0 +1,286 @@
+name: M3 Weasel TSF Context Bridge
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/context-engine/**"
+      - "src/context-service/include/contextime/context_protocol.h"
+      - "src/context-service/include/contextime/context_service.h"
+      - "src/context-service/include/contextime/decision_cache.h"
+      - "src/context-service/include/contextime/editor_context.h"
+      - "src/context-service/src/context_protocol.cpp"
+      - "src/context-service/src/context_service_client_win.cpp"
+      - "src/context-service/src/decision_cache.cpp"
+      - "src/context-service/src/win_pipe_io.h"
+      - "src/ime-host/**"
+      - "tests/ime-host/**"
+      - "scripts/run-ime-host-tests.ps1"
+      - "native/contextime.identity.json"
+      - "native/upstream.lock.json"
+      - "native/patches/m3-ime-context-bridge/**"
+      - "native/scripts/apply-contextime-identity.ps1"
+      - "native/scripts/normalize-weasel-0.17.4.ps1"
+      - "native/scripts/apply-contextime-0.1.1-fixes.ps1"
+      - "native/scripts/apply-contextime-0.1.2-fixes.ps1"
+      - "native/scripts/apply-contextime-0.1.3-fixes.ps1"
+      - "native/scripts/apply-contextime-0.2.0-fixes.ps1"
+      - "native/scripts/apply-contextime-0.2.1-fixes.ps1"
+      - "native/scripts/apply-contextime-0.2.2-fixes.ps1"
+      - "native/scripts/apply-contextime-0.2.3-fixes.ps1"
+      - "native/scripts/apply-contextime-m3-ime-context-bridge.ps1"
+      - ".github/workflows/m3-weasel-context-bridge.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-weasel-tsf-context-bridge:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      BOOST_ROOT: ${{ github.workspace }}\_upstream\weasel\deps\boost_1_84_0
+      SDKVER: 10.0.19041.0
+
+    steps:
+      - name: Checkout ContextIME
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Read pinned upstream
+        id: upstream
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lock = Get-Content native/upstream.lock.json -Raw | ConvertFrom-Json
+          $identity = Get-Content native/contextime.identity.json -Raw | ConvertFrom-Json
+          if ($lock.weasel.commit -ne '9cc96e20dc71b80876b12f689bb5863c76c2a7ed' -or
+              $lock.weasel.version -ne '0.17.4') {
+            throw 'M3 bridge must remain pinned to audited Weasel 0.17.4.'
+          }
+          if ($identity.upstream.weaselCommit -ne $lock.weasel.commit -or
+              $identity.upstream.librimeCommit -ne $lock.librime.commit) {
+            throw 'Identity and upstream lock disagree.'
+          }
+          "weasel_sha=$($lock.weasel.commit)" >> $env:GITHUB_OUTPUT
+          "librime_sha=$($lock.librime.commit)" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout pinned Weasel
+        uses: actions/checkout@v4
+        with:
+          repository: rime/weasel
+          ref: ${{ steps.upstream.outputs.weasel_sha }}
+          path: _upstream/weasel
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+          show-progress: false
+
+      - name: Verify exact upstream commits
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $weasel = (git -C _upstream/weasel rev-parse HEAD).Trim()
+          $librime = (git -C _upstream/weasel/librime rev-parse HEAD).Trim()
+          if ($weasel -ne '${{ steps.upstream.outputs.weasel_sha }}') {
+            throw "Weasel SHA mismatch: $weasel"
+          }
+          if ($librime -ne '${{ steps.upstream.outputs.librime_sha }}') {
+            throw "librime SHA mismatch: $librime"
+          }
+          @(
+            "weasel=$weasel"
+            "librime=$librime"
+            "runner=$env:ImageOS"
+            "image=$env:ImageVersion"
+          ) | Set-Content contextime-m3-upstream-commits.txt
+
+      - name: Apply existing ContextIME patch stack and M3 bridge
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./native/scripts/normalize-weasel-0.17.4.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-identity.ps1 `
+            -WeaselRoot _upstream/weasel `
+            -IdentityPath native/contextime.identity.json `
+            -ReportPath contextime-identity-report.json
+          ./native/scripts/apply-contextime-0.1.1-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.1.2-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.1.3-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.0-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.1-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.2-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.2.3-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-m3-ime-context-bridge.ps1 `
+            -WeaselRoot _upstream/weasel
+
+          git -C _upstream/weasel add -N -- include/contextime WeaselTSF/ContextIME
+          git -C _upstream/weasel diff --check
+          git -C _upstream/weasel diff --no-ext-diff |
+            Set-Content contextime-weasel-m3-context-bridge.patch -Encoding utf8
+          git -C _upstream/weasel diff --stat
+
+      - name: Audit TSF thread and failure boundaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $report = Get-Content contextime-m3-ime-context-bridge-report.json -Raw |
+            ConvertFrom-Json
+          if ($report.contextServiceOnKeyPath -or
+              -not $report.realWindowsVerificationRequired -or
+              $report.runtimeInstallChanged -or
+              -not $report.candidateVisibilityResetOnDestroy) {
+            throw 'Generated M3 bridge report violates the rollout boundary.'
+          }
+
+          $bridge = Get-Content _upstream/weasel/WeaselTSF/ContextIME/ContextBridge.cpp -Raw
+          foreach ($required in @(
+            'ContextIME.TSF.ContextDecisionWindow.v1'
+            'PostMessageW(window, kContextDecisionReadyMessage'
+            '_contextRefreshWorker.Stop();'
+            'GetCurrentThreadId() != _contextOwnerThreadId'
+            '_status.composing || _pComposition != nullptr'
+            'IsContextCandidateVisible()'
+            '_contextManualOverrideUntilMs'
+            'ImeStateApplier::ApplyDecision'
+            'm_client.TrayCommand'
+            'm_client.GetResponseData'
+          )) {
+            if (-not $bridge.Contains($required)) {
+              throw "M3 TSF bridge audit missing: $required"
+            }
+          }
+
+          $keySink = Get-Content _upstream/weasel/WeaselTSF/KeyEventSink.cpp -Raw
+          if ($keySink.Contains('EvaluateViaContextService') -or
+              $keySink.Contains('ContextServicePipe')) {
+            throw 'Context Service IPC entered _ProcessKeyEvent.'
+          }
+
+          $lifecycle = Get-Content _upstream/weasel/WeaselTSF/WeaselTSF.cpp -Raw
+          if ($lifecycle.IndexOf('_UninitContextBridge();') -gt
+              $lifecycle.IndexOf('m_client.EndSession();')) {
+            throw 'Worker teardown does not precede Weasel/COM teardown.'
+          }
+
+          $candidateUi = Get-Content _upstream/weasel/WeaselUI/WeaselUI.cpp -Raw
+          if (-not $candidateUi.Contains('pimpl_->shown = false;')) {
+            throw 'Candidate UI destruction does not reset context visibility.'
+          }
+
+          $patch = Get-Content contextime-weasel-m3-context-bridge.patch -Raw
+          foreach ($sourceAddition in @(
+            'WeaselTSF/ContextIME/ContextBridge.cpp'
+            'WeaselTSF/ContextIME/context_refresh_worker_win.cpp'
+            'include/contextime/context_refresh_worker.h'
+          )) {
+            if (-not $patch.Contains($sourceAddition)) {
+              throw "GPL source patch omitted added source: $sourceAddition"
+            }
+          }
+
+      - name: Configure Visual Studio 2022 build
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: Copy-Item env.vs2022.bat env.bat -Force
+
+      - name: Cache Boost 1.84.0
+        id: cache-boost
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_ROOT }}
+          key: native-ime-${{ runner.os }}-boost-1.84.0-v143
+
+      - name: Install and build Boost
+        if: steps.cache-boost.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: _upstream/weasel
+        run: |
+          ./install_boost.bat
+          ./build.bat boost
+
+      - name: Enter MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          sdk: ${{ env.SDKVER }}
+
+      - name: Re-run canonical IME bridge fixtures
+        shell: pwsh
+        run: ./scripts/run-ime-host-tests.ps1
+
+      - name: Render pinned Weasel build properties
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PLATFORM_TOOLSET = 'v143'
+          $env:VERSION_MAJOR = '0'
+          $env:VERSION_MINOR = '17'
+          $env:VERSION_PATCH = '4'
+          $env:PRODUCT_VERSION = '0.17.4.0'
+          $env:FILE_VERSION = '0.17.4.0'
+          cscript.exe //nologo render.js weasel.props `
+            BOOST_ROOT PLATFORM_TOOLSET VERSION_MAJOR VERSION_MINOR `
+            VERSION_PATCH PRODUCT_VERSION FILE_VERSION
+          if ($LASTEXITCODE -ne 0) {
+            throw "weasel.props rendering failed: $LASTEXITCODE"
+          }
+
+      - name: Build patched Weasel TSF x64 and Win32
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($platform in @('x64', 'Win32')) {
+            msbuild.exe weasel.sln `
+              /nologo /m /t:WeaselTSF `
+              /p:Configuration=Release `
+              /p:Platform=$platform `
+              /p:PlatformToolset=v143 `
+              /p:WindowsTargetPlatformVersion=$env:SDKVER
+            if ($LASTEXITCODE -ne 0) {
+              throw "WeaselTSF $platform build failed: $LASTEXITCODE"
+            }
+          }
+
+      - name: Record compile evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(
+            Get-Item _upstream/weasel/output/weaselx64.dll
+            Get-Item _upstream/weasel/output/weasel.dll
+          )
+          $evidence = foreach ($file in $files) {
+            $hash = Get-FileHash $file.FullName -Algorithm SHA256
+            [PSCustomObject]@{
+              file = $file.Name
+              bytes = $file.Length
+              sha256 = $hash.Hash.ToLowerInvariant()
+            }
+          }
+          [PSCustomObject]@{
+            status = 'built / statically_verified'
+            runtime = 'REAL_WINDOWS_VERIFICATION_REQUIRED'
+            installer = 'not produced by this compile-only gate'
+            outputs = @($evidence)
+          } | ConvertTo-Json -Depth 4 |
+            Set-Content contextime-m3-weasel-build-evidence.json -Encoding utf8
+          Get-Content contextime-m3-weasel-build-evidence.json
+
+      - name: Upload compile-only bridge evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextime-m3-weasel-context-bridge-build
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            _upstream/weasel/output/weaselx64.dll
+            _upstream/weasel/output/weasel.dll
+            contextime-m3-upstream-commits.txt
+            contextime-identity-report.json
+            contextime-m3-ime-context-bridge-report.json
+            contextime-weasel-m3-context-bridge.patch
+            contextime-m3-weasel-build-evidence.json

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "baseline": "weasel-0.17.4-librime-1.13.1",
+  "target": "windows-x64",
+  "weasel": {
+    "repository": "https://github.com/rime/weasel.git",
+    "version": "0.17.4",
+    "commit": "9cc96e20dc71b80876b12f689bb5863c76c2a7ed",
+    "license": "GPL-3.0",
+    "role": "Windows TSF frontend, candidate UI, service, setup and installer baseline"
+  },
+  "librime": {
+    "repository": "https://github.com/rime/librime.git",
+    "version": "1.13.1",
+    "commit": "1c23358157934bd6e6d6981f0c0164f05393b497",
+    "license": "BSD-3-Clause",
+    "role": "Composition, schemas, dictionaries, candidates and user learning"
+  },
+  "toolchain": {
+    "runner": "windows-2022",
+    "visualStudio": "2022",
+    "platformToolset": "v143",
+    "windowsSdk": "10.0.19041.0",
+    "boost": "1.84.0",
+    "xmakeMinimum": "2.9.4",
+    "installer": "NSIS"
+  },
+  "policy": {
+    "allowNightlyAsBaseline": false,
+    "allowAutomaticLibrimeUpgrade": false,
+    "requireCleanWindowsBuild": true,
+    "requireSourceOfferForDistributedWeaselDerivative": true
+  }
+}

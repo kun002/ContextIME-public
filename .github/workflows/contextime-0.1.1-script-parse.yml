@@ -1,0 +1,58 @@
+name: ContextIME 0.1.1 Script Parse
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "native/scripts/apply-contextime-0.1.1-fixes.ps1"
+      - ".github/workflows/contextime-0.1.1-script-parse.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  parse:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          show-progress: false
+
+      - name: Parse PowerShell script
+        id: parse
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'native/scripts/apply-contextime-0.1.1-fixes.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List * -Force | Out-String | Set-Content parser-errors.txt
+            'failure' | Set-Content parser-result.txt
+            throw "PowerShell parser found $($errors.Count) error(s)."
+          }
+          'success' | Set-Content parser-result.txt
+
+      - name: Upload parser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextime-0.1.1-parser-diagnostics
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            parser-result.txt
+            parser-errors.txt
+
+      - name: Fail on parser errors
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path parser-result.txt) -or (Get-Content parser-result.txt -Raw).Trim() -ne 'success') {
+            if (Test-Path parser-errors.txt) { Get-Content parser-errors.txt }
+            throw 'ContextIME 0.1.1 fix script has PowerShell parser errors.'
+          }

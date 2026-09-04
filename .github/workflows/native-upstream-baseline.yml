@@ -1,0 +1,146 @@
+name: Native Upstream Baseline
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "native/upstream.lock.json"
+      - "docs/m0-upstream-baseline.md"
+      - ".github/workflows/native-upstream-baseline.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-weasel-baseline:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      BOOST_ROOT: ${{ github.workspace }}\_upstream\weasel\deps\boost_1_84_0
+      SDKVER: 10.0.19041.0
+
+    steps:
+      - name: Checkout ContextIME
+        uses: actions/checkout@v4
+
+      - name: Read pinned versions
+        id: lock
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lock = Get-Content native/upstream.lock.json -Raw | ConvertFrom-Json
+          "weasel_sha=$($lock.weasel.commit)" >> $env:GITHUB_OUTPUT
+          "weasel_version=$($lock.weasel.version)" >> $env:GITHUB_OUTPUT
+          "librime_sha=$($lock.librime.commit)" >> $env:GITHUB_OUTPUT
+          "librime_version=$($lock.librime.version)" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout pinned Weasel
+        uses: actions/checkout@v4
+        with:
+          repository: rime/weasel
+          ref: ${{ steps.lock.outputs.weasel_sha }}
+          path: _upstream/weasel
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify upstream commits
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $weasel = (git -C _upstream/weasel rev-parse HEAD).Trim()
+          $librime = (git -C _upstream/weasel/librime rev-parse HEAD).Trim()
+          if ($weasel -ne '${{ steps.lock.outputs.weasel_sha }}') {
+            throw "Weasel SHA mismatch: $weasel"
+          }
+          if ($librime -ne '${{ steps.lock.outputs.librime_sha }}') {
+            throw "librime SHA mismatch: expected ${{ steps.lock.outputs.librime_sha }}, got $librime"
+          }
+          @(
+            "weasel=$weasel",
+            "librime=$librime",
+            "runner=$env:ImageOS",
+            "image=$env:ImageVersion"
+          ) | Set-Content upstream-commits.txt
+
+      - name: Configure Visual Studio 2022 build
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item env.vs2022.bat env.bat -Force
+
+      - name: Cache Boost 1.84.0
+        id: cache-boost
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_ROOT }}
+          key: native-ime-${{ runner.os }}-boost-1.84.0-v143
+
+      - name: Install and build Boost
+        if: steps.cache-boost.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: _upstream/weasel
+        run: |
+          ./install_boost.bat
+          ./build.bat boost
+
+      - name: Enter MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          sdk: ${{ env.SDKVER }}
+
+      - name: Download pinned librime development assets
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\get-rime.ps1 -tag '${{ steps.lock.outputs.librime_version }}' -use dev
+
+      - name: Build Rime data
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\build.bat data
+
+      - name: Build Weasel installer baseline
+        shell: pwsh
+        working-directory: _upstream/weasel
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:RELEASE_BUILD = '1'
+          .\build.bat installer
+
+      - name: Collect build evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archives = Get-ChildItem _upstream/weasel/output/archives/weasel*.exe
+          if (-not $archives) { throw 'No Weasel installer was produced.' }
+          $hashes = foreach ($file in $archives) {
+            $hash = Get-FileHash $file.FullName -Algorithm SHA256
+            [PSCustomObject]@{
+              file = $file.Name
+              bytes = $file.Length
+              sha256 = $hash.Hash.ToLowerInvariant()
+            }
+          }
+          $hashes | ConvertTo-Json | Set-Content upstream-installer-hashes.json
+          Get-Command cl, msbuild, cmake | Select-Object Name, Source | Format-Table -AutoSize | Out-String | Set-Content toolchain.txt
+          cl 2>&1 | Add-Content toolchain.txt
+          cmake --version | Add-Content toolchain.txt
+          Get-Content upstream-commits.txt, toolchain.txt, upstream-installer-hashes.json
+
+      - name: Upload upstream baseline evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextime-m0-weasel-${{ steps.lock.outputs.weasel_version }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            _upstream/weasel/output/archives/weasel*.exe
+            upstream-commits.txt
+            upstream-installer-hashes.json
+            toolchain.txt

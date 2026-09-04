@@ -1,0 +1,75 @@
+name: Context Service
+
+on:
+  push:
+    paths:
+      - "src/context-engine/**"
+      - "src/context-service/**"
+      - "src/project-indexer/**"
+      - "tests/context-service/**"
+      - "scripts/run-context-service-tests.ps1"
+      - "docs/context-service.md"
+      - "docs/project-dictionary.md"
+      - "docs/project-dictionary-protocol.md"
+      - "docs/project-dictionary-management.md"
+      - "docs/project-dictionary-candidate-bridge.md"
+      - "docs/evidence/m5-project-candidate-bridge-ci.md"
+      - "docs/evidence/m5-language-server-symbol-ingestion-ci.md"
+      - "docs/decision-cache.md"
+      - "docs/application-context.md"
+      - "docs/editor-context-protocol.md"
+      - "docs/evidence/m3-context-service-ci.md"
+      - "docs/evidence/m3-decision-cache-ci.md"
+      - "docs/evidence/m3-application-context-ci.md"
+      - "docs/evidence/m4-editor-context-protocol-ci.md"
+      - ".github/workflows/context-service.yml"
+  pull_request:
+    paths:
+      - "src/context-engine/**"
+      - "src/context-service/**"
+      - "src/project-indexer/**"
+      - "tests/context-service/**"
+      - "scripts/run-context-service-tests.ps1"
+      - "docs/context-service.md"
+      - "docs/project-dictionary.md"
+      - "docs/project-dictionary-protocol.md"
+      - "docs/project-dictionary-management.md"
+      - "docs/project-dictionary-candidate-bridge.md"
+      - "docs/evidence/m5-project-candidate-bridge-ci.md"
+      - "docs/evidence/m5-language-server-symbol-ingestion-ci.md"
+      - "docs/decision-cache.md"
+      - "docs/application-context.md"
+      - "docs/editor-context-protocol.md"
+      - "docs/evidence/m3-context-service-ci.md"
+      - "docs/evidence/m3-decision-cache-ci.md"
+      - "docs/evidence/m3-application-context-ci.md"
+      - "docs/evidence/m4-editor-context-protocol-ci.md"
+      - ".github/workflows/context-service.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-2022
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout ContextIME
+        uses: actions/checkout@v4
+
+      - name: Enter MSVC developer environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile and test Context Service
+        shell: pwsh
+        run: ./scripts/run-context-service-tests.ps1

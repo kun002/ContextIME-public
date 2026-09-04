@@ -1,0 +1,82 @@
+{
+  "name": "@context-ime/vscode-adapter",
+  "displayName": "ContextIME",
+  "description": "Report normalized VS Code context to the native ContextIME service.",
+  "version": "0.5.0",
+  "private": true,
+  "main": "dist/extension.js",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "context-ime.reportNow", "title": "ContextIME: Report Editor Context Now" },
+      { "command": "context-ime.adapterStatus", "title": "ContextIME: Show Adapter Status" },
+      { "command": "context-ime.refreshProjectDictionary", "title": "ContextIME: Refresh Project Symbols" }
+    ],
+    "configuration": {
+      "title": "ContextIME",
+      "properties": {
+        "context-ime.adapter.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report normalized editor context to the local ContextIME service."
+        },
+        "context-ime.adapter.debounceMs": {
+          "type": "number",
+          "default": 35,
+          "minimum": 0,
+          "maximum": 500,
+          "description": "Coalesce rapid VS Code context events before reporting."
+        },
+        "context-ime.adapter.heartbeatMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 250,
+          "maximum": 1500,
+          "description": "Refresh focused context before the native service's 2-second TTL expires."
+        },
+        "context-ime.adapter.timeoutMs": {
+          "type": "number",
+          "default": 250,
+          "minimum": 25,
+          "maximum": 1000,
+          "description": "Total deadline for one background local Named Pipe report."
+        },
+        "context-ime.projectDictionary.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Collect bounded symbol names from the active document's Language Server for the local project dictionary."
+        },
+        "context-ime.projectDictionary.debounceMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 100,
+          "maximum": 5000,
+          "description": "Delay project symbol collection after active-editor, save, or workspace events."
+        },
+        "context-ime.projectDictionary.timeoutMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 5000,
+          "description": "Total deadline for all background Project Indexer batches from one document."
+        },
+        "context-ime.projectDictionary.maximumSymbolsPerDocument": {
+          "type": "number",
+          "default": 256,
+          "minimum": 1,
+          "maximum": 256,
+          "description": "Maximum approved Language Server symbols collected from one active document."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@context-ime/syntax-runtime": "0.4.0"
+  }
+}
