@@ -67,6 +67,9 @@ void TestBoundedLanguageServerSnapshot() {
   Expect(refreshed && refreshed->generation == generation &&
              refreshed->expires_at_ms == 5000,
          "lease refresh keeps immutable candidate generation stable");
+  Expect(!cache.RefreshLease(dictionary.project_id, 5001) &&
+             cache.Read()->expires_at_ms == 5000,
+         "expired snapshot cannot be revived by a later project heartbeat");
   Expect(!cache.RefreshLease("ffeeddccbbaa99887766554433221100", 2000),
          "different project cannot refresh the active lease");
 }

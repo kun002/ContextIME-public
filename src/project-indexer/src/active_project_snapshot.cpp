@@ -98,7 +98,8 @@ bool ActiveProjectSnapshotCache::RefreshLease(
     const std::string& project_id, std::uint64_t now_ms) noexcept {
   try {
     const auto current = Read();
-    if (!current || current->project_id != project_id || project_id.empty()) {
+    if (!current || current->project_id != project_id || project_id.empty() ||
+        !IsActiveProjectSnapshotLive(*current, now_ms)) {
       return false;
     }
     auto refreshed = std::make_shared<ActiveProjectSnapshot>(*current);
