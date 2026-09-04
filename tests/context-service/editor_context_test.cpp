@@ -81,9 +81,8 @@ void TestSurfaceAndPrecedence() {
                    10, 10);
   ContextSnapshot terminal_snapshot;
   terminal.Apply(VSCode(), 11, terminal_snapshot);
-  Expect(terminal_snapshot.surface_context.has_value &&
-             terminal_snapshot.surface_context.value == InputMode::English,
-         "integrated terminal suggests English surface");
+  Expect(!terminal_snapshot.surface_context.has_value,
+         "integrated terminal keeps current mode");
   Expect(!terminal_snapshot.syntax_context.has_value,
          "integrated terminal ignores stale editor syntax");
 

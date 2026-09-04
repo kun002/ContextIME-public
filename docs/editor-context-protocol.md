@@ -84,7 +84,7 @@ update 只有同时满足以下条件才可贡献规则：
 | editor code / Markdown code | syntax `ENGLISH` |
 | editor comment / Markdown text | syntax `CHINESE` |
 | editor string / unknown | 不提供建议 |
-| integrated terminal | surface `ENGLISH` |
+| integrated terminal | 不提供建议（`KEEP`） |
 | stale / unfocused / 非 VS Code foreground | 不提供建议 |
 
 调用方已经提供的 syntax 或 surface rule 不会被覆盖。最终仍由 Context Engine 按 composition protection、用户锁定、manual override、user/project rule、syntax、surface、application、`KEEP` 的固定优先级决策；adapter 和 store 都不直接改变 IME state。
@@ -106,7 +106,7 @@ M4.1 receiver 没有网络能力，也不读取编辑器文档。M4.2 只在 VS 
 
 - editor request/response round-trip、固定 wire size 和严格字段校验；
 - TTL 边界、focus、真实 VS Code foreground、其他 editor 隔离；
-- code/comment/Markdown/string/terminal 映射与 caller precedence；
+- code/comment/Markdown/string 映射、terminal `KEEP` 与 caller precedence；
 - Named Pipe 成功 update、malformed update 拒绝和缺失 store 错误响应；
 - Context Service executable 和 IME host worker 的链接输入完整性。
 

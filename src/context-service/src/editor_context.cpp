@@ -66,9 +66,9 @@ void EditorContextStore::Apply(const ApplicationContext& application,
   }
 
   if (update_.surface == EditorSurface::IntegratedTerminal) {
-    if (!snapshot.surface_context.has_value) {
-      snapshot.surface_context = OptionalMode::Some(InputMode::English);
-    }
+    // The Adapter still reports the surface, but terminal mode policy is
+    // paused until users can configure it. Contribute no rule so the engine
+    // keeps the current manual mode.
     return;
   }
   if (update_.surface != EditorSurface::Editor ||
