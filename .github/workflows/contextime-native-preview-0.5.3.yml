@@ -1,13 +1,63 @@
-name: ContextIME Native Preview 0.5.2
+name: ContextIME Native Preview 0.5.3
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "native/contextime.identity.json"
+      - "native/upstream.lock.json"
+      - "native/data/contextime_developer-0.2.0.schema.yaml"
+      - "native/data/contextime_developer-0.2.1.schema.yaml"
+      - "native/data/contextime_developer-0.2.2.schema.yaml"
+      - "native/data/contextime_developer-0.2.3.schema.yaml"
+      - "native/data/contextime_developer.schema.yaml"
+      - "native/data/rime-0.2.3.lua"
+      - "native/data/rime.lua"
+      - "native/scripts/apply-contextime-identity.ps1"
+      - "native/scripts/normalize-weasel-0.17.4.ps1"
+      - "native/scripts/apply-contextime-0.1.1-fixes.ps1"
+      - "native/scripts/apply-contextime-0.1.2-fixes.ps1"
+      - "native/scripts/apply-contextime-0.1.3-fixes.ps1"
+      - "native/scripts/apply-contextime-0.1.3-data.ps1"
+      - "native/scripts/apply-contextime-0.2.0-fixes.ps1"
+      - "native/scripts/apply-contextime-0.2.0-data.ps1"
+      - "native/scripts/apply-contextime-0.2.1-fixes.ps1"
+      - "native/scripts/apply-contextime-0.2.1-data.ps1"
+      - "native/scripts/apply-contextime-0.2.2-fixes.ps1"
+      - "native/scripts/apply-contextime-0.2.2-data.ps1"
+      - "native/scripts/apply-contextime-0.2.3-fixes.ps1"
+      - "native/scripts/apply-contextime-0.2.3-data.ps1"
+      - "native/scripts/apply-contextime-0.5.0-data.ps1"
+      - "native/scripts/apply-contextime-m3-ime-context-bridge.ps1"
+      - "native/scripts/apply-contextime-0.3.0-fixes.ps1"
+      - "native/scripts/apply-contextime-0.3.1-fixes.ps1"
+      - "native/scripts/apply-contextime-0.4.0-fixes.ps1"
+      - "native/scripts/apply-contextime-0.5.0-fixes.ps1"
+      - "native/scripts/apply-contextime-0.5.1-fixes.ps1"
+      - "native/scripts/apply-contextime-0.5.2-fixes.ps1"
+      - "native/scripts/apply-contextime-0.5.3-fixes.ps1"
+      - "native/patches/m3-ime-context-bridge/ContextBridge.cpp"
+      - "src/context-engine/**"
+      - "src/context-service/**"
+      - "src/project-indexer/**"
+      - "src/settings/**"
+      - "src/ime-host/**"
+      - "tests/context-service/**"
+      - "tests/ime-host/**"
+      - "tests/project-indexer/**"
+      - "scripts/run-context-service-tests.ps1"
+      - "scripts/run-ime-host-tests.ps1"
+      - "scripts/run-project-indexer-tests.ps1"
+      - "native/scripts/run-contextime-tsf-smoke.ps1"
+      - "native/tests/tsf-smoke/ContextIMETsfSmoke.cs"
+      - "native/tests/tsf-smoke/fixtures/m2-mixed-input.json"
+      - ".github/workflows/contextime-native-preview-0.5.3.yml"
 
 permissions:
   contents: read
 
 jobs:
-  build-contextime-preview-0-5-2:
+  build-contextime-preview-0-5-3:
     runs-on: windows-2022
     timeout-minutes: 90
     env:
@@ -26,13 +76,13 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $identity = Get-Content native/contextime.identity.json -Raw | ConvertFrom-Json
-          if ($identity.product.version -ne '0.5.2-preview') {
+          if ($identity.product.version -ne '0.5.3-preview') {
             throw "Identity version mismatch: $($identity.product.version)"
           }
-          if ($identity.product.numericVersion -ne '0.5.2.0') {
+          if ($identity.product.numericVersion -ne '0.5.3.0') {
             throw "Identity numeric version mismatch: $($identity.product.numericVersion)"
           }
-          if ($identity.directories.installLeaf -ne 'contextime-0.5.2-preview') {
+          if ($identity.directories.installLeaf -ne 'contextime-0.5.3-preview') {
             throw "Identity install directory mismatch: $($identity.directories.installLeaf)"
           }
           if ($identity.runtime.projectIndexerPipe -ne 'ContextIME.ProjectIndexer.v1') {
@@ -103,10 +153,11 @@ jobs:
           ./native/scripts/apply-contextime-0.5.0-fixes.ps1 -WeaselRoot _upstream/weasel
           ./native/scripts/apply-contextime-0.5.1-fixes.ps1 -WeaselRoot _upstream/weasel
           ./native/scripts/apply-contextime-0.5.2-fixes.ps1 -WeaselRoot _upstream/weasel
+          ./native/scripts/apply-contextime-0.5.3-fixes.ps1 -WeaselRoot _upstream/weasel
           git -C _upstream/weasel add -N -- include/contextime WeaselTSF/ContextIME RimeWithWeasel/ContextIME
           git -C _upstream/weasel diff --check
           git -C _upstream/weasel diff --stat
-          git -C _upstream/weasel diff | Set-Content contextime-weasel-0.5.2.patch -Encoding utf8
+          git -C _upstream/weasel diff | Set-Content contextime-weasel-0.5.3.patch -Encoding utf8
 
       - name: Configure Visual Studio 2022 build
         shell: pwsh
@@ -220,7 +271,7 @@ jobs:
             throw 'Project Dictionary Manager executable was not staged.'
           }
 
-      - name: Build ContextIME 0.5.2 installer
+      - name: Build ContextIME 0.5.3 installer
         shell: pwsh
         working-directory: _upstream/weasel
         run: |
@@ -239,8 +290,8 @@ jobs:
         working-directory: _upstream/weasel
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = (Resolve-Path 'output/archives/contextime-0.5.2-preview-installer.exe').Path
-          $sandbox = Join-Path $env:RUNNER_TEMP 'contextime-0.5.2-manifest'
+          $installer = (Resolve-Path 'output/archives/contextime-0.5.3-preview-installer.exe').Path
+          $sandbox = Join-Path $env:RUNNER_TEMP 'contextime-0.5.3-manifest'
           New-Item -ItemType Directory -Path $sandbox -Force | Out-Null
           $sevenZip = (Resolve-Path 'output/7z.exe').Path
           $manifest = (& $sevenZip l -slt $installer | Out-String)
@@ -271,17 +322,17 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = Get-Item _upstream/weasel/output/archives/contextime-0.5.2-preview-installer.exe
+          $installer = Get-Item _upstream/weasel/output/archives/contextime-0.5.3-preview-installer.exe
           $hash = Get-FileHash $installer.FullName -Algorithm SHA256
           $contextService = Get-Item _upstream/weasel/output/contextime-context-service.exe
           $contextServiceHash = Get-FileHash $contextService.FullName -Algorithm SHA256
           $projectManager = Get-Item _upstream/weasel/output/contextime-project-dictionary-manager.exe
           $projectManagerHash = Get-FileHash $projectManager.FullName -Algorithm SHA256
           $identityReport = Get-Content contextime-identity-report.json -Raw | ConvertFrom-Json
-          if ($identityReport.product.version -ne '0.5.2-preview' -or
-              $identityReport.product.numericVersion -ne '0.5.2.0' -or
-              $identityReport.directories.installLeaf -ne 'contextime-0.5.2-preview') {
-            throw 'Generated identity report does not describe ContextIME 0.5.2.'
+          if ($identityReport.product.version -ne '0.5.3-preview' -or
+              $identityReport.product.numericVersion -ne '0.5.3.0' -or
+              $identityReport.directories.installLeaf -ne 'contextime-0.5.3-preview') {
+            throw 'Generated identity report does not describe ContextIME 0.5.3.'
           }
           $lifecycleReport = Get-Content contextime-0.4.0-fix-report.json -Raw | ConvertFrom-Json
           if ($lifecycleReport.windowsServiceManagerUsed -or
@@ -306,9 +357,11 @@ jobs:
               -not $performanceReport.realWindowsVerificationRequired) {
             throw 'M5 large-project performance report violates the input-path boundary.'
           }
-          $managementReport = Get-Content contextime-0.5.2-fix-report.json -Raw | ConvertFrom-Json
+          $managementReport = Get-Content contextime-0.5.3-fix-report.json -Raw | ConvertFrom-Json
           if ($managementReport.executable -ne 'contextime-project-dictionary-manager.exe' -or
               $managementReport.operations.Count -ne 5 -or
+              $managementReport.terminalApplicationDefault -ne 'KEEP' -or
+              $managementReport.integratedTerminalDefault -ne 'KEEP' -or
               $managementReport.diskIoOnKeyPath -or
               $managementReport.ipcOnKeyPath -or
               $managementReport.nodeOnKeyPath -or
@@ -393,8 +446,8 @@ jobs:
             throw 'Localized NSIS script is not UTF-8 with BOM.'
           }
           foreach ($required in @(
-            'ContextIME 0.5.2 Preview',
-            'contextime-0.5.2-preview-installer.exe',
+            'ContextIME 0.5.3 Preview',
+            'contextime-0.5.3-preview-installer.exe',
             'File "data\rime.lua"',
             'File "contextime-context-service.exe"',
             'File "contextime-project-dictionary-manager.exe"',
@@ -433,7 +486,7 @@ jobs:
             bytes = $installer.Length
             sha256 = $hash.Hash.ToLowerInvariant()
             product = 'ContextIME'
-            version = '0.5.2-preview'
+            version = '0.5.3-preview'
             defaultSchema = 'contextime_developer'
             serverMutex = '(CONTEXTIME)NativeServer-<username>'
             contextService = [PSCustomObject]@{
@@ -456,20 +509,20 @@ jobs:
             }
             weasel = '${{ steps.identity.outputs.weasel_sha }}'
             librime = '${{ steps.identity.outputs.librime_sha }}'
-          } | ConvertTo-Json -Depth 4 | Set-Content contextime-0.5.2-installer-hash.json
+          } | ConvertTo-Json -Depth 4 | Set-Content contextime-0.5.3-installer-hash.json
           Get-Command cl, msbuild, cmake | Select-Object Name, Source | Format-Table -AutoSize | Out-String | Set-Content contextime-toolchain.txt
           cl 2>&1 | Add-Content contextime-toolchain.txt
           cmake --version | Add-Content contextime-toolchain.txt
-          Get-Content contextime-upstream-commits.txt, contextime-identity-report.json, contextime-0.1.3-fix-report.json, contextime-0.1.3-data-report.json, contextime-0.2.0-fix-report.json, contextime-0.2.0-data-report.json, contextime-0.2.1-fix-report.json, contextime-0.2.1-data-report.json, contextime-0.2.2-fix-report.json, contextime-0.2.2-data-report.json, contextime-0.2.3-fix-report.json, contextime-0.2.3-data-report.json, contextime-0.3.0-fix-report.json, contextime-0.3.1-fix-report.json, contextime-0.4.0-fix-report.json, contextime-0.5.0-fix-report.json, contextime-0.5.0-data-report.json, contextime-0.5.1-fix-report.json, contextime-0.5.2-fix-report.json, contextime-0.5.2-installer-hash.json
+          Get-Content contextime-upstream-commits.txt, contextime-identity-report.json, contextime-0.1.3-fix-report.json, contextime-0.1.3-data-report.json, contextime-0.2.0-fix-report.json, contextime-0.2.0-data-report.json, contextime-0.2.1-fix-report.json, contextime-0.2.1-data-report.json, contextime-0.2.2-fix-report.json, contextime-0.2.2-data-report.json, contextime-0.2.3-fix-report.json, contextime-0.2.3-data-report.json, contextime-0.3.0-fix-report.json, contextime-0.3.1-fix-report.json, contextime-0.4.0-fix-report.json, contextime-0.5.0-fix-report.json, contextime-0.5.0-data-report.json, contextime-0.5.1-fix-report.json, contextime-0.5.2-fix-report.json, contextime-0.5.3-fix-report.json, contextime-0.5.3-installer-hash.json
 
-      - name: Upload ContextIME 0.5.2 preview and source evidence
+      - name: Upload ContextIME 0.5.3 preview and source evidence
         uses: actions/upload-artifact@v4
         with:
-          name: contextime-native-0.5.2-preview
+          name: contextime-native-0.5.3-preview
           if-no-files-found: error
           retention-days: 14
           path: |
-            _upstream/weasel/output/archives/contextime-0.5.2-preview-installer.exe
+            _upstream/weasel/output/archives/contextime-0.5.3-preview-installer.exe
             _upstream/weasel/output/LICENSE.txt
             _upstream/weasel/output/README.txt
             _upstream/weasel/output/contextime-project-dictionary-manager.exe
@@ -494,6 +547,7 @@ jobs:
             native/scripts/apply-contextime-0.5.0-fixes.ps1
             native/scripts/apply-contextime-0.5.1-fixes.ps1
             native/scripts/apply-contextime-0.5.2-fixes.ps1
+            native/scripts/apply-contextime-0.5.3-fixes.ps1
             native/patches/m3-ime-context-bridge/ContextBridge.cpp
             src/context-engine/
             src/context-service/
@@ -524,6 +578,7 @@ jobs:
             contextime-0.5.0-data-report.json
             contextime-0.5.1-fix-report.json
             contextime-0.5.2-fix-report.json
-            contextime-weasel-0.5.2.patch
-            contextime-0.5.2-installer-hash.json
+            contextime-0.5.3-fix-report.json
+            contextime-weasel-0.5.3.patch
+            contextime-0.5.3-installer-hash.json
             contextime-toolchain.txt
