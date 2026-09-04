@@ -193,3 +193,8 @@ TypeScript/C++ canonical fixtures、双平台 Store/snapshot/codec、Windows loc
 `0.5.0-preview` 已在 Windows 11 Build 26200 登录且解锁的交互桌面完成真实 VS Code Adapter → installed Context Service → `%APPDATA%` dictionary → Candidate Pipe → Weasel/librime 候选端到端验证。输入 `player` 时第一候选显示 `PlayerController 〔项目·类〕` 并可由空格提交；完全停止 Context Service 和三个 service Pipe 后，普通拼音 `nihao → 你好` 仍通过。主机证据见 [`evidence/m5-project-candidate-bridge-host-verification.md`](evidence/m5-project-candidate-bridge-host-verification.md)。
 
 大项目性能、其他 Language Server、干净机、LAN 和 RDP 仍为 `REAL_WINDOWS_VERIFICATION_REQUIRED`，不属于本次 M5.3 已验证范围。
+
+`0.5.2-preview` 还完成了安装版 `CIPM` 管理入口的真实 Windows 验证，包括
+分页、禁用、启用、过期 lease heartbeat、二次确认删除和普通拼音 fail-open。
+证据见
+[`evidence/m5-project-dictionary-management-host-verification.md`](evidence/m5-project-dictionary-management-host-verification.md)。

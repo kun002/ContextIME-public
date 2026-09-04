@@ -300,7 +300,7 @@ M4.2 设计：[`docs/vscode-adapter.md`](vscode-adapter.md)。验证证据：[`d
 - [ ] 增加 compilation database、project file、file/directory/Unity asset 等后续有界 source。
 - [x] M5.2 symbol source 允许 C#、TypeScript/JavaScript、C/C++、Python language ID。
 - [ ] 增量更新资源名和用户批准的技术术语。
-- [ ] 提供词库查看、删除和禁用。
+- [x] 提供词库查看、删除和禁用。
 - [x] M5.3 在候选窗口以 `〔项目·类型〕` 标记项目候选来源。
 - [x] M5.2 协议不承载或保存完整源码、URI、workspace 路径、range、detail、container、Token 或环境变量值。
 - [x] 大项目索引不阻塞输入。
@@ -323,7 +323,7 @@ M5.2 当前边界：
 - 设计：[`docs/project-dictionary.md`](project-dictionary.md) 与 [`docs/project-dictionary-protocol.md`](project-dictionary-protocol.md)；
 - CI 证据：[`docs/evidence/m5-language-server-symbol-ingestion-ci.md`](evidence/m5-language-server-symbol-ingestion-ci.md)，Project Dictionary run `33730311588`、Context Service run `33730311542`、General CI run `33730311569`；
 - VS Code Adapter → installed service → `%APPDATA%` 已随 M5.3 在真实交互桌面完成端到端验证；
-- 项目词候选、来源标记和 fail-open 由下方 M5.3 证据覆盖；M5 总项仍因管理 UI 和后续 source 未完成。
+- 项目词候选、来源标记和 fail-open 由下方 M5.3 证据覆盖；后续 source 仍未完成，管理入口见 M5.4。
 
 M5.3 当前边界：
 
@@ -335,7 +335,7 @@ M5.3 当前边界：
 - Windows 11 Build 26200 真实 VS Code 验证：Language Server 上报 `PlayerController` / `spawnPlayer`，输入 `player` 后第一候选显示 `PlayerController 〔项目·类〕`，空格提交成功；
 - Context Service 及三个 service Pipe 全部停止时，Notepad `nihao → 你好`、英文透传和中文恢复仍通过；
 - 主机证据：[`docs/evidence/m5-project-candidate-bridge-host-verification.md`](evidence/m5-project-candidate-bridge-host-verification.md)；
-- 状态：`M5.3_PROJECT_CANDIDATE_BRIDGE = VERIFIED`。其他 Language Server、管理 UI、干净机、LAN 和 RDP 不在本次已验证边界内；大项目性能见下节。
+- 状态：`M5.3_PROJECT_CANDIDATE_BRIDGE = VERIFIED`。其他 Language Server、干净机、LAN 和 RDP 不在本次已验证边界内；管理入口和大项目性能见下节。
 
 大项目后台增量性能当前边界：
 
@@ -347,7 +347,20 @@ M5.3 当前边界：
 - `0.5.1-preview` 已在 Windows 11 交互桌面通过已安装 Context Service 的真实 Project Indexer Pipe 对 100,000 条词库执行 20 轮各 64 条增量更新；累计 14,358 ms、单轮最大 647 ms；
 - 同期 Notepad `nihao → 你好` 的 composition、候选、上屏、英文 `abc` 和中文恢复全部通过；Context Service、ContextIME Server 与官方 Weasel 均保持相同 PID/启动时间；
 - 固定测试项目已精确删除，原有项目词库未被清理；主机证据：[`docs/evidence/m5-project-dictionary-performance-host-verification.md`](evidence/m5-project-dictionary-performance-host-verification.md)；
-- 状态：`M5_PROJECT_DICTIONARY_LARGE_PROJECT = VERIFIED`。其他 Language Server、管理 UI、干净机、LAN 和 RDP 仍未验证或未完成。
+- 状态：`M5_PROJECT_DICTIONARY_LARGE_PROJECT = VERIFIED`。其他 Language Server、干净机、LAN 和 RDP 仍未验证或未完成。
+
+M5.4 管理入口当前边界：
+
+- 原生 Win32 管理器从安装后的开始菜单启动，只通过有界 `CIPM` 帧访问既有 Project Indexer 单 owner；
+- 10 万词库的第一页 `1-100`、下一页 `101-200` 和返回上一页已在 Windows 11 交互桌面通过；
+- 禁用和启用后的立即查看未再出现 `UNAVAILABLE`，active snapshot 为 `256 → 0 → 256`；
+- 验收发现并修复过期 snapshot 可被禁用项目 heartbeat 重新续租的边界，修复后禁用 heartbeat 保持 0 个候选；
+- 固定测试词库已通过二次确认删除，项目列表和 active snapshot 均清空，真实词库 SHA-256 不变；
+- Context Service 三个 Pipe 全部停止时，Notepad `nihao → 你好`、英文 `abc` 和中文恢复仍通过；
+- 安装程序：`contextime-0.5.2-preview-installer.exe`，`12,294,547` bytes，SHA-256 `c61356c4f19351041fb805d52a7463c8c4166378dc6653eca3b0391d4db2ec5c`；
+- Build commit：`48740cfa6158d7334ef5d8c21e1f8613f59c704a`，公开 Preview run `33876802484`；
+- 证据：[`docs/evidence/m5-project-dictionary-management-host-verification.md`](evidence/m5-project-dictionary-management-host-verification.md)；
+- 状态：`M5.4_PROJECT_DICTIONARY_MANAGEMENT = VERIFIED`。干净机、LAN、RDP 和其他 Language Server 仍未验证。
 
 ## M6：个人习惯
 

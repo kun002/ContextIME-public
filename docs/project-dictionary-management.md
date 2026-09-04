@@ -82,4 +82,12 @@ Context Service 不存在、Pipe busy、超时、断开、协议错误、词库�
 - `real_machine_verified`：必须在登录且解锁的 Windows 交互桌面从安装后的开始
   菜单入口完成查看、禁用、启用和测试词库删除，同时回归普通拼音 fail-open。
 
-在最后一项完成前标记 `REAL_WINDOWS_VERIFICATION_REQUIRED`。
+`0.5.2-preview` 已在登录且解锁的 Windows 11 交互桌面完成安装后开始菜单
+入口、10 万词库分页、禁用、启用、过期 lease heartbeat、二次确认删除和普通
+拼音 fail-open 验证。验收期间发现并修复“过期 snapshot 可被禁用项目 heartbeat
+重新续租”的边界；修复后禁用状态保持 0 个候选，重新启用后恢复 256 个候选。
+完整分层证据见
+[`evidence/m5-project-dictionary-management-host-verification.md`](evidence/m5-project-dictionary-management-host-verification.md)。
+
+状态：`M5.4_PROJECT_DICTIONARY_MANAGEMENT = VERIFIED`。干净机、LAN 和 RDP
+仍为 `REAL_WINDOWS_VERIFICATION_REQUIRED`。

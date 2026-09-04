@@ -161,7 +161,7 @@ M5.3 固定 CI 还验证了双平台 snapshot/candidate codec、Windows local Ca
 
 主机原始 JSON、候选截图、词库副本、Adapter 日志、资源快照和 SHA-256 见 [`evidence/m5-project-candidate-bridge-host-verification.md`](evidence/m5-project-candidate-bridge-host-verification.md)。当前状态为 `M5.3_PROJECT_CANDIDATE_BRIDGE = VERIFIED`。
 
-仍未验证或未完成的边界：其他 Language Server 的真实 symbol 行为、词库管理 UI、后续数据源、干净机、LAN 和 RDP。M5.2 固定 CI 证据仍见 [`evidence/m5-language-server-symbol-ingestion-ci.md`](evidence/m5-language-server-symbol-ingestion-ci.md)。
+M5.3 仍未验证或未完成的边界：其他 Language Server 的真实 symbol 行为、后续数据源、干净机、LAN 和 RDP。管理入口由下方 M5.4 单独关闭。M5.2 固定 CI 证据仍见 [`evidence/m5-language-server-symbol-ingestion-ci.md`](evidence/m5-language-server-symbol-ingestion-ci.md)。
 
 ## 大项目后台增量性能
 
@@ -200,5 +200,14 @@ Context Service、ContextIME Server 与官方 Weasel 均未重启。固定测试
 active-project immutable snapshot；管理调用失败不影响普通拼音输入。
 
 当前实现和协议门禁见
-[`project-dictionary-management.md`](project-dictionary-management.md)。安装包与
-真实交互桌面验证完成前仍为 `REAL_WINDOWS_VERIFICATION_REQUIRED`。
+[`project-dictionary-management.md`](project-dictionary-management.md)。
+
+`0.5.2-preview` 已在 Windows 11 登录且解锁的交互桌面完成安装版管理器验收：
+10 万词库第一页、下一页和上一页正确；禁用/启用后的立即查看不再误报
+`UNAVAILABLE`；过期 snapshot 不能被禁用项目 heartbeat 重新续租；启用后
+候选恢复；固定测试词库经二次确认删除且真实词库哈希不变；Context Service
+停止时普通拼音仍可用。证据见
+[`evidence/m5-project-dictionary-management-host-verification.md`](evidence/m5-project-dictionary-management-host-verification.md)。
+
+状态：`M5.4_PROJECT_DICTIONARY_MANAGEMENT = VERIFIED`。干净机、LAN 和 RDP
+仍为 `REAL_WINDOWS_VERIFICATION_REQUIRED`。
