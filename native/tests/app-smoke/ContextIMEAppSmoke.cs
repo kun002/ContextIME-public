@@ -324,132 +324,94 @@ namespace ContextIME.NativeTests
 
         private static void RunTerminalContextScenario(AppSmokeOptions options, IAppProbe probe, AppSmokeResult result)
         {
-            const string pinyin = "nihao";
-            const string expectedChinese = "你好";
             const int candidateThreshold = 1500;
-            const int automaticSettleMilliseconds = 1500;
-            const int manualCompositionDelayMilliseconds = 750;
-            const int protectedCandidateObservationMilliseconds = 5600;
+            const int contextSettleMilliseconds = 1500;
 
-            Thread.Sleep(automaticSettleMilliseconds);
+            Thread.Sleep(contextSettleMilliseconds);
             result.ForegroundBeforePinyinInput = NativeMethods.GetForegroundWindow() == probe.WindowHandle;
             if (!result.ForegroundBeforePinyinInput)
             {
-                result.Errors.Add("Terminal lost foreground focus before the automatic-English probe.");
+                result.Errors.Add("Terminal lost foreground focus before the default-KEEP probe.");
                 return;
             }
-
-            NativeMethods.TypeAscii(pinyin);
-            Thread.Sleep(600);
-            result.AutomaticEnglishText = probe.ReadText();
-            result.AutomaticEnglishObserved = probe.TextMatches(result.AutomaticEnglishText, pinyin);
-            if (!result.AutomaticEnglishObserved)
-            {
-                result.Errors.Add("Terminal context did not automatically apply English mode.");
-                return;
-            }
-
-            NativeMethods.PressKey(NativeMethods.VirtualKeyEscape);
-            NativeMethods.PressChord(NativeMethods.VirtualKeyControl, (byte)'C');
-            Thread.Sleep(500);
-            if (NativeMethods.GetForegroundWindow() != probe.WindowHandle)
-            {
-                result.Errors.Add("Terminal lost foreground focus before the manual-override probe.");
-                return;
-            }
-
-            NativeMethods.PressKey(NativeMethods.VirtualKeyShift);
-            Stopwatch manualClock = Stopwatch.StartNew();
-            Thread.Sleep(manualCompositionDelayMilliseconds);
 
             using (Bitmap clean = Capture(probe.CaptureRegion))
             {
-                NativeMethods.TypeAscii(pinyin);
+                NativeMethods.TypeAscii(options.InputText);
                 Thread.Sleep(750);
                 using (Bitmap candidate = Capture(probe.CaptureRegion))
                 {
-                    result.ManualCandidateObservedAtMilliseconds = manualClock.ElapsedMilliseconds;
-                    result.ManualCandidateChangedPixels = CountChangedPixels(clean, candidate);
-                    result.ManualCandidateScreenshotPath = options.EvidencePath + ".manual-candidate.png";
-                    candidate.Save(result.ManualCandidateScreenshotPath, System.Drawing.Imaging.ImageFormat.Png);
-                    result.ManualCompositionText = probe.ReadText();
-                    result.ManualOverrideProtected =
-                        result.ManualCandidateChangedPixels >= candidateThreshold &&
-                        !probe.TextMatches(result.ManualCompositionText, pinyin) &&
-                        NativeMethods.GetForegroundWindow() == probe.WindowHandle;
-                }
-
-                result.CandidateWindowDetected = result.ManualOverrideProtected;
-                result.CandidateChangedPixels = result.ManualCandidateChangedPixels;
-                result.CandidateScreenshotPath = result.ManualCandidateScreenshotPath;
-                if (!result.ManualOverrideProtected)
-                {
-                    result.Errors.Add("The manual Chinese switch was overridden before composition could open.");
-                    return;
-                }
-
-                int remaining = protectedCandidateObservationMilliseconds - (int)manualClock.ElapsedMilliseconds;
-                if (remaining > 0) Thread.Sleep(remaining);
-                using (Bitmap protectedCandidate = Capture(probe.CaptureRegion))
-                {
-                    result.CandidateObservedAfterManualSwitchMilliseconds = manualClock.ElapsedMilliseconds;
-                    result.ProtectedCandidateChangedPixels = CountChangedPixels(clean, protectedCandidate);
-                    result.ProtectedCandidateScreenshotPath = options.EvidencePath + ".protected-candidate.png";
-                    protectedCandidate.Save(result.ProtectedCandidateScreenshotPath, System.Drawing.Imaging.ImageFormat.Png);
-                    result.ProtectedCompositionText = probe.ReadText();
-                    result.CandidateProtectedPastManualWindow =
-                        result.CandidateObservedAfterManualSwitchMilliseconds >= 5000 &&
-                        result.ProtectedCandidateChangedPixels >= candidateThreshold &&
-                        !probe.TextMatches(result.ProtectedCompositionText, pinyin) &&
-                        NativeMethods.GetForegroundWindow() == probe.WindowHandle;
+                    result.ForegroundBeforeCandidateCapture = NativeMethods.GetForegroundWindow() == probe.WindowHandle;
+                    result.CandidateChangedPixels = CountChangedPixels(clean, candidate);
+                    result.CandidateScreenshotPath = options.EvidencePath + ".candidate.png";
+                    candidate.Save(result.CandidateScreenshotPath, System.Drawing.Imaging.ImageFormat.Png);
+                    result.ForegroundAfterCandidateCapture = NativeMethods.GetForegroundWindow() == probe.WindowHandle;
+                    result.CandidateWindowDetected = result.CandidateChangedPixels >= candidateThreshold;
+                    result.TerminalCompositionText = probe.ReadText();
+                    result.TerminalDefaultKeepObserved =
+                        result.ForegroundBeforeCandidateCapture &&
+                        result.ForegroundAfterCandidateCapture &&
+                        result.CandidateWindowDetected &&
+                        !probe.TextMatches(result.TerminalCompositionText, options.InputText);
                 }
             }
 
-            if (!result.CandidateProtectedPastManualWindow)
+            if (!result.TerminalDefaultKeepObserved)
             {
-                result.Errors.Add("Terminal context replaced the active candidate after manual protection expired.");
+                result.Errors.Add("Terminal context did not keep the explicitly selected Chinese mode.");
                 return;
             }
 
             result.ForegroundBeforeCommit = NativeMethods.GetForegroundWindow() == probe.WindowHandle;
             if (!result.ForegroundBeforeCommit)
             {
-                result.Errors.Add("Terminal lost foreground focus before the protected commit.");
+                result.Errors.Add("Terminal lost foreground focus before the candidate commit.");
                 return;
             }
             NativeMethods.PressKey(NativeMethods.VirtualKeySpace);
             Thread.Sleep(800);
-            result.ProtectedCommitText = probe.ReadText();
-            result.ProtectedCommitMatched = probe.TextMatches(result.ProtectedCommitText, expectedChinese);
-            result.CommittedText = result.ProtectedCommitText;
-            result.CommitMatched = result.ProtectedCommitMatched;
-            if (!result.ProtectedCommitMatched)
+            result.CommittedText = probe.ReadText();
+            result.CommitMatched = probe.TextMatches(result.CommittedText, options.ExpectedText);
+            if (!result.CommitMatched)
             {
-                result.Errors.Add("The protected candidate did not commit simplified Chinese 你好.");
+                result.Errors.Add("The Terminal candidate did not commit the expected Chinese text.");
                 return;
             }
 
-            Thread.Sleep(automaticSettleMilliseconds);
-            NativeMethods.TypeAscii(pinyin);
-            Thread.Sleep(600);
-            result.AutomaticEnglishResumeText = probe.ReadText();
-            result.AutomaticEnglishResumed = probe.TextMatches(result.AutomaticEnglishResumeText, expectedChinese + pinyin);
-            result.FinalText = result.AutomaticEnglishResumeText;
-            result.EnglishModeMatched = result.AutomaticEnglishObserved && result.AutomaticEnglishResumed;
+            result.ForegroundBeforeEnglishSwitch = NativeMethods.GetForegroundWindow() == probe.WindowHandle;
+            if (!result.ForegroundBeforeEnglishSwitch)
+            {
+                result.Errors.Add("Terminal lost foreground focus before the manual English switch.");
+                return;
+            }
+            NativeMethods.PressKey(NativeMethods.VirtualKeyShift);
+            Thread.Sleep(450);
+            result.ForegroundBeforeEnglishInput = NativeMethods.GetForegroundWindow() == probe.WindowHandle;
+            if (!result.ForegroundBeforeEnglishInput)
+            {
+                result.Errors.Add("Terminal lost foreground focus before the manual English input.");
+                return;
+            }
+            NativeMethods.TypeAscii(options.ExpectedEnglish);
+            Thread.Sleep(700);
+            result.FinalText = probe.ReadText();
+            result.EnglishModeMatched = probe.TextMatches(result.FinalText, options.ExpectedText + options.ExpectedEnglish);
             result.ForegroundAfterInput = NativeMethods.GetForegroundWindow() == probe.WindowHandle;
 
-            NativeMethods.PressKey(NativeMethods.VirtualKeyEscape);
-            NativeMethods.PressChord(NativeMethods.VirtualKeyControl, (byte)'C');
-            Thread.Sleep(250);
+            if (result.EnglishModeMatched && result.ForegroundAfterInput)
+            {
+                NativeMethods.PressKey(NativeMethods.VirtualKeyShift);
+                Thread.Sleep(450);
+                result.ChineseModeRestored = NativeMethods.GetForegroundWindow() == probe.WindowHandle;
+            }
 
             result.Passed = result.ProfileActivated && result.ForegroundAcquired && result.InitialCompositionDismissed &&
-                result.FixturePrepared && result.AutomaticEnglishObserved && result.ManualOverrideProtected &&
-                result.CandidateProtectedPastManualWindow && result.ProtectedCommitMatched &&
-                result.AutomaticEnglishResumed && result.ForegroundAfterInput;
-            if (!result.AutomaticEnglishResumed)
-            {
-                result.Errors.Add("Terminal automatic English mode did not resume after composition committed.");
-            }
+                result.FixturePrepared && result.ForegroundBeforePinyinInput && result.TerminalDefaultKeepObserved &&
+                result.ForegroundBeforeCommit && result.CommitMatched && result.ForegroundBeforeEnglishSwitch &&
+                result.ForegroundBeforeEnglishInput && result.EnglishModeMatched && result.ForegroundAfterInput &&
+                result.ChineseModeRestored;
+            if (!result.EnglishModeMatched) result.Errors.Add("Terminal manual English-mode text did not match the expected fixture.");
+            if (result.EnglishModeMatched && !result.ChineseModeRestored) result.Errors.Add("Chinese mode was not restored after the Terminal English-mode check.");
         }
 
         private static void RunVsCodeContextScenario(AppSmokeOptions options, IAppProbe probe, AppSmokeResult result)
@@ -1850,25 +1812,13 @@ namespace ContextIME.NativeTests
         public bool CandidateWindowDetected;
         public int CandidateChangedPixels;
         public string CandidateScreenshotPath;
+        public string TerminalCompositionText;
+        public bool TerminalDefaultKeepObserved;
         public bool CommitMatched;
         public bool EnglishModeMatched;
         public bool ChineseModeRestored;
         public string AutomaticEnglishText;
         public bool AutomaticEnglishObserved;
-        public long ManualCandidateObservedAtMilliseconds;
-        public int ManualCandidateChangedPixels;
-        public string ManualCandidateScreenshotPath;
-        public string ManualCompositionText;
-        public bool ManualOverrideProtected;
-        public long CandidateObservedAfterManualSwitchMilliseconds;
-        public int ProtectedCandidateChangedPixels;
-        public string ProtectedCandidateScreenshotPath;
-        public string ProtectedCompositionText;
-        public bool CandidateProtectedPastManualWindow;
-        public string ProtectedCommitText;
-        public bool ProtectedCommitMatched;
-        public string AutomaticEnglishResumeText;
-        public bool AutomaticEnglishResumed;
         public bool CleanupForegroundAcquired;
         public int CleanupForegroundAcquireAttempts;
         public bool CompositionDismissedBeforeClose;
