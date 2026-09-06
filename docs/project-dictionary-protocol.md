@@ -152,9 +152,34 @@ M5.4 管理程序在同一 Project Indexer Pipe 上使用独立 `CIPM` magic。�
 REMOVE_PROJECT`，固定 32768-byte response 支持最多 512 个 project ID 或
 128 个完整词条的分页结果。既有 `CIPD` request/response 布局保持不变。
 
+M5.5 增加两个 term 操作，request 数据区（offset 40 起）在其余操作仍必须
+全零的前提下复用为固定有界词条：
+
+| Relative offset | Size | 字段 |
+|---:|---:|---|
+| 0 | 2 | symbol UTF-8 byte length，`1..128` |
+| 2 | 1 | symbol type |
+| 3 | 1 | source |
+| 4 | variable | symbol UTF-8 bytes |
+| entry end | remaining | reserved，必须全零 |
+
+- `UPSERT_TERM`：`symbol_type` 必须为 `term`，`source` 必须为
+  `manual`，project ID 必须非零。目标项目必须已出现在词库列表中
+  （project 文件已存在），否则返回 `NOT_FOUND`；管理入口不能凭空创建
+  匿名 ID 词库。server 使用本机时钟填充 `last_seen`，frequency 固定以
+  `1` 进入与既有 Store 相同的单调 upsert，重复添加同一术语只刷新时间、
+  不会回退已有频次。词库已满 100,000 条时新增返回 `STORE_ERROR`。
+- `REMOVE_ENTRY`：按 `symbol + symbol_type + source` 精确键删除，允许
+  任意合法 type/source 组合（即管理界面可见的任意词条）。删除不存在的
+  键是幂等成功；project 不存在仍返回 `NOT_FOUND`。
+- 两个操作成功 response 的 `exists/enabled/total_count` 返回变更后的
+  词库元数据，不携带词条列表。
+
 Server 按 magic 分流后仍在 Project Indexer 单 owner 线程执行 Store 操作。
 禁用 active project 会发布无候选的 immutable snapshot；重新启用会发布恢复后
-snapshot；删除 active project 会立即清空 snapshot。详细布局、UI 和故障语义见
+snapshot；删除 active project 会立即清空 snapshot；UPSERT_TERM 和
+REMOVE_ENTRY 在同一项目仍持有 active lease 时按变更后的 persisted
+snapshot 原子重发。详细布局、UI 和故障语义见
 [`project-dictionary-management.md`](project-dictionary-management.md)。
 
 ## 故障边界

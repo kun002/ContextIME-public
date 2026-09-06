@@ -36,6 +36,8 @@ enum class Operation : std::uint8_t {
   ViewProject = 2,
   SetEnabled = 3,
   RemoveProject = 4,
+  UpsertTerm = 5,
+  RemoveEntry = 6,
 };
 
 enum class ResponseStatus : std::uint8_t {
@@ -64,6 +66,10 @@ struct ManagementRequest {
   bool enabled = false;
   std::uint16_t page_size = 0;
   std::uint32_t cursor = 0;
+  // Only UPSERT_TERM and REMOVE_ENTRY carry an entry on the wire. UPSERT_TERM
+  // must target symbol_type=term/source=manual; the server owns frequency and
+  // last_seen_ms, so the request values are ignored.
+  ProjectDictionaryEntry entry{};
 };
 
 struct ManagementResponse {

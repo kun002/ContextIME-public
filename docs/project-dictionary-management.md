@@ -29,16 +29,23 @@ UI、Adapter 和候选桥同时拥有 Store。
 - symbol、类型、来源、频次和最后更新时间；
 - 启用或禁用选中词库；
 - 带二次确认的整库删除；
-- 项目刷新和词条翻页。
+- 项目刷新和词条翻页；
+- 术语输入框和“添加术语”：以 `term / manual` 固定来源写入选中项目，
+  长度上限 128 UTF-8 bytes，去重后由 server 单调刷新；
+- “删除词条”：删除词条列表中选中的单条记录（任意来源），带二次确认。
 
 项目路径从未写入词库或管理协议，所以管理程序只显示 opaque project ID，
 不会尝试反推出 workspace 路径。当前没有增加项目别名或其他元数据。
+手动术语只在用户选中的既有项目上添加；没有“新建项目”入口，因为匿名
+project ID 只能由 Adapter 对真实 workspace 路径域分隔哈希产生。
 
 禁用保留词库文件和记录，并立即为仍处于 active lease 的同项目发布空候选
 snapshot。重新启用会从已持久化 snapshot 恢复项目候选。删除会移除项目文件
 及临时文件，并立即清除匹配的 active snapshot。仍打开的编辑器在后续 symbol
 采集事件中可以重新建立已删除词库；这是“删除当前索引数据”而不是永久屏蔽
-该 workspace，永久停止候选应使用禁用。
+该 workspace，永久停止候选应使用禁用。删除单条词条同样立即重发 active
+snapshot；被删除的 Language Server 词条会在下一次符号采集事件中重新进入
+词库，这是预期行为。
 
 ## CIPM v1
 
@@ -61,6 +68,8 @@ snapshot。重新启用会从已持久化 snapshot 恢复项目候选。删除�
 symbol / symbol_type / source / frequency / last_seen
 ```
 
+M5.5 的 `UPSERT_TERM / REMOVE_ENTRY` 在 request 数据区携带同模型中的
+`symbol / symbol_type / source`；frequency 和 last_seen 仍由 server 拥有。
 它没有 workspace path、URI、源码、range、detail、container、输入正文、密码、
 Token、API Key 或环境变量字段。
 
@@ -91,3 +100,24 @@ Context Service 不存在、Pipe busy、超时、断开、协议错误、词库�
 
 状态：`M5.4_PROJECT_DICTIONARY_MANAGEMENT = VERIFIED`。干净机、LAN 和 RDP
 仍为 `REAL_WINDOWS_VERIFICATION_REQUIRED`。
+
+## M5.5 手动术语入口
+
+M5.5 在不新增 pipe、不改变 `CIPD` Adapter 路径的前提下，把“用户批准的
+技术术语”接入同一 Project Indexer owner：
+
+- `CIPM` 增加 `UPSERT_TERM` 和 `REMOVE_ENTRY`，由管理窗口触发；
+- Store 增加 `RemoveEntry`：按 `symbol + symbol_type + source` 精确删除，
+  幂等且与 immutable 缓存一致；
+- active-project snapshot 发布过滤器从仅 `language_server` 扩展为
+  `language_server + manual`，手动术语随后续 M5.3 桥接进入 librime 候选，
+  标记为 `〔项目·术语〕`；
+- 手动术语的频次在 M6 学习接入前保持固定；重复添加只刷新 server 观察
+  时间。
+
+当前边界：
+
+- 手动术语按原始 UTF-8 前缀匹配拼音输入串；英文标识符和术语可直接前缀
+  命中，中文词语不会由拼音前缀命中，需要后续 pinyin 标注支持；
+- `UPSERT_TERM` 不能创建不存在的项目词库；
+- CI 编译/单测与安装版真机验收状态见 roadmap M5.5 小节。

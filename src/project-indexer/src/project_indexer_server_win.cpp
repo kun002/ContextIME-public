@@ -266,6 +266,74 @@ void HandleManagementRequest(
     return;
   }
 
+  if (request.operation == management_protocol::Operation::UpsertTerm) {
+    ProjectDictionarySnapshot dictionary;
+    auto status = store->Load(project_id, dictionary);
+    if (status != ProjectDictionaryStatus::Ok) {
+      SetStoreError(status, response);
+      return;
+    }
+    if (!dictionary.exists) {
+      response.status = management_protocol::ResponseStatus::NotFound;
+      return;
+    }
+    // The manager supplies only the approved symbol; observation state stays
+    // server-owned exactly like the Adapter upsert path.
+    ProjectDictionaryEntry term;
+    term.symbol = request.entry.symbol;
+    term.symbol_type = ProjectSymbolType::Term;
+    term.source = ProjectSymbolSource::Manual;
+    term.frequency = 1;
+    term.last_seen_ms = CurrentUnixTimeMs();
+    std::shared_ptr<const ProjectDictionarySnapshot> persisted;
+    status = store->Upsert(project_id, {term}, &persisted);
+    if (status != ProjectDictionaryStatus::Ok) {
+      SetStoreError(status, response);
+      return;
+    }
+    response.exists = true;
+    response.enabled = persisted->enabled;
+    response.total_count =
+        static_cast<std::uint32_t>(persisted->entries.size());
+    const auto active = snapshot_cache->Read();
+    const std::uint64_t now_ms = GetTickCount64();
+    if (active && active->project_id == project_id &&
+        IsActiveProjectSnapshotLive(*active, now_ms)) {
+      snapshot_cache->Publish(*persisted, now_ms);
+    }
+    return;
+  }
+
+  if (request.operation == management_protocol::Operation::RemoveEntry) {
+    ProjectDictionarySnapshot dictionary;
+    auto status = store->Load(project_id, dictionary);
+    if (status != ProjectDictionaryStatus::Ok) {
+      SetStoreError(status, response);
+      return;
+    }
+    if (!dictionary.exists) {
+      response.status = management_protocol::ResponseStatus::NotFound;
+      return;
+    }
+    std::shared_ptr<const ProjectDictionarySnapshot> persisted;
+    status = store->RemoveEntry(project_id, request.entry, &persisted);
+    if (status != ProjectDictionaryStatus::Ok) {
+      SetStoreError(status, response);
+      return;
+    }
+    response.exists = true;
+    response.enabled = persisted->enabled;
+    response.total_count =
+        static_cast<std::uint32_t>(persisted->entries.size());
+    const auto active = snapshot_cache->Read();
+    const std::uint64_t now_ms = GetTickCount64();
+    if (active && active->project_id == project_id &&
+        IsActiveProjectSnapshotLive(*active, now_ms)) {
+      snapshot_cache->Publish(*persisted, now_ms);
+    }
+    return;
+  }
+
   const auto status = store->Remove(project_id);
   if (status != ProjectDictionaryStatus::Ok) {
     SetStoreError(status, response);

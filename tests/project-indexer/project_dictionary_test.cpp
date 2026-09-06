@@ -277,6 +277,72 @@ void TestCachedSnapshotInvalidatesAfterExternalReplacement() {
          "cached update failure preserves externally replaced evidence");
 }
 
+void TestRemoveEntryTargetsSingleKeyAndPersists() {
+  TemporaryDirectory temporary;
+  ProjectDictionaryStore store(temporary.path());
+  const std::vector<ProjectDictionaryEntry> seed = {
+      Entry("PhotonSlash", ProjectSymbolType::Term,
+            ProjectSymbolSource::Manual, 3, 100),
+      Entry("PhotonSlash", ProjectSymbolType::Method,
+            ProjectSymbolSource::LanguageServer, 2, 110),
+      Entry("SpawnPlayer", ProjectSymbolType::Method,
+            ProjectSymbolSource::LanguageServer, 1, 120),
+  };
+  Expect(store.Upsert(kProjectA, seed) == ProjectDictionaryStatus::Ok,
+         "remove-entry fixture persists three keyed entries");
+
+  std::shared_ptr<const ProjectDictionarySnapshot> persisted;
+  Expect(store.RemoveEntry(
+             kProjectA,
+             Entry("PhotonSlash", ProjectSymbolType::Term,
+                   ProjectSymbolSource::Manual, 9, 999),
+             &persisted) == ProjectDictionaryStatus::Ok,
+         "removing the manual term key succeeds");
+  Expect(persisted && persisted->exists && persisted->enabled &&
+             persisted->entries.size() == 2,
+         "removal returns the exact persisted snapshot");
+  bool only_method_remains = false;
+  for (const auto& entry : persisted->entries) {
+    if (entry.symbol == "PhotonSlash") {
+      only_method_remains =
+          entry.symbol_type == ProjectSymbolType::Method &&
+          entry.source == ProjectSymbolSource::LanguageServer;
+    }
+  }
+  Expect(only_method_remains,
+         "only the matching symbol/type/source key is removed");
+  ProjectDictionarySnapshot reloaded;
+  Expect(store.Load(kProjectA, reloaded) == ProjectDictionaryStatus::Ok &&
+             reloaded.entries.size() == 2,
+         "removal persists across reload");
+
+  Expect(store.RemoveEntry(kProjectA,
+                           Entry("Missing", ProjectSymbolType::Term,
+                                 ProjectSymbolSource::Manual)) ==
+             ProjectDictionaryStatus::Ok,
+         "removing an absent key is idempotent");
+  Expect(store.RemoveEntry(kProjectB,
+                           Entry("PhotonSlash", ProjectSymbolType::Term,
+                                 ProjectSymbolSource::Manual)) ==
+             ProjectDictionaryStatus::Ok,
+         "removing from a project without a dictionary is idempotent");
+  ProjectDictionarySnapshot missing;
+  Expect(store.Load(kProjectB, missing) == ProjectDictionaryStatus::Ok &&
+             !missing.exists,
+         "removal never creates a project file");
+
+  Expect(store.RemoveEntry(kProjectA,
+                           Entry("Bad\nKey", ProjectSymbolType::Term,
+                                 ProjectSymbolSource::Manual)) ==
+             ProjectDictionaryStatus::InvalidEntry,
+         "invalid entry key is rejected before storage");
+  Expect(store.RemoveEntry(
+             "00112233", Entry("X", ProjectSymbolType::Term,
+                               ProjectSymbolSource::Manual)) ==
+             ProjectDictionaryStatus::InvalidProjectId,
+         "invalid project id is rejected before storage");
+}
+
 void TestStableNames() {
   Expect(std::string(contextime::ToString(ProjectSymbolType::Namespace)) ==
              "namespace",
@@ -300,6 +366,7 @@ int main() {
   TestInvalidInputCannotMutateStorage();
   TestCorruptDataIsRejectedWithoutOverwrite();
   TestCachedSnapshotInvalidatesAfterExternalReplacement();
+  TestRemoveEntryTargetsSingleKeyAndPersists();
   TestStableNames();
 
   if (failures != 0) {
