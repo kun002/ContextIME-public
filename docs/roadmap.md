@@ -302,7 +302,8 @@ M4.2 设计：[`docs/vscode-adapter.md`](vscode-adapter.md)。验证证据：[`d
 - [ ] 增量更新资源名和用户批准的技术术语。
 - [x] 提供词库查看、删除和禁用。
 - [x] M5.3 在候选窗口以 `〔项目·类型〕` 标记项目候选来源。
-- [x] M5.5 用户手动批准术语进入项目词库与候选（资源名等待后续有界 source）。
+- [x] M5.5 手动术语写入项目词库与管理入口（真机验证）。
+- [ ] M5.5 手动术语候选上屏安装版验收；资源名等待后续有界 source。
 - [x] M5.2 协议不承载或保存完整源码、URI、workspace 路径、range、detail、container、Token 或环境变量值。
 - [x] 大项目索引不阻塞输入。
 
@@ -370,7 +371,8 @@ M5.5 用户批准术语当前边界：
 - active-project snapshot 发布过滤器从仅 `language_server` 扩展为 `language_server + manual`，手动术语沿 M5.3 桥接进入候选并显示 `〔项目·术语〕`；
 - 中文词语当前不会由拼音前缀命中（需后续 pinyin 标注）；`UPSERT_TERM` 不能创建不存在的项目词库；
 - CI 证据：见 `docs/evidence/m5-approved-terms-ci.md`（私有仓库 Actions 因账单暂停，构建与测试由 ContextIME-public 镜像 CI 完成）；
-- 安装版真机验收（从开始菜单管理器添加术语并在真实候选窗口提交）仍未完成，需随下一个预览包关闭。
+- `0.5.4-preview` 暂存（未安装）服务与 CI 构建管理器已在登录桌面完成：真实 Adapter 采集进 0.5.4 服务、管理器添加术语落盘 `term/manual`、视图 2→3、既有 `language_server` 记录字节不变、整库删除回归、真实词库 SHA-256 全程不变；证据见 `docs/evidence/m5-approved-terms-host-verification.md`；
+- 安装版候选上屏验收（输入拼音、提交 `〔项目·术语〕` 候选）仍未完成：本次会话 app-smoke 的 `/nascii` 中文模式握手对已安装 0.5.3 服务持续超时，且 UAC 提权需交互确认；`M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = REAL_WINDOWS_VERIFICATION_REQUIRED`。
 
 ## M6：个人习惯
 
