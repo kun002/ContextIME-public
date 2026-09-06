@@ -303,7 +303,8 @@ M4.2 设计：[`docs/vscode-adapter.md`](vscode-adapter.md)。验证证据：[`d
 - [x] 提供词库查看、删除和禁用。
 - [x] M5.3 在候选窗口以 `〔项目·类型〕` 标记项目候选来源。
 - [x] M5.5 手动术语写入项目词库与管理入口（真机验证）。
-- [ ] M5.5 手动术语候选上屏安装版验收；资源名等待后续有界 source。
+- [x] M5.5 手动术语候选上屏安装版验收。
+- [ ] 资源名等待后续有界 source。
 - [x] M5.2 协议不承载或保存完整源码、URI、workspace 路径、range、detail、container、Token 或环境变量值。
 - [x] 大项目索引不阻塞输入。
 
@@ -371,9 +372,11 @@ M5.5 用户批准术语当前边界：
 - active-project snapshot 发布过滤器从仅 `language_server` 扩展为 `language_server + manual`，手动术语沿 M5.3 桥接进入候选并显示 `〔项目·术语〕`；
 - 中文词语当前不会由拼音前缀命中（需后续 pinyin 标注）；`UPSERT_TERM` 不能创建不存在的项目词库；
 - CI 证据：见 `docs/evidence/m5-approved-terms-ci.md`（私有仓库 Actions 因账单暂停，构建与测试由 ContextIME-public 镜像 CI 完成）；
-- `0.5.4-preview` 已由用户完成覆盖安装并重启；登录桌面上已验证：真实 Adapter 采集进安装版服务（同一工作区路径得到同一匿名 ID）、管理器添加术语落盘 `term/manual`、管理器删除词条把被误加术语的真实词库恢复到字节级一致（SHA-256 前后相同）、整库删除回归通过；证据见 `docs/evidence/m5-approved-terms-host-verification.md`；
-- 会话中诊断出早前"无候选"观察的根因：ContextIME TSF Server 在 smoke 超时处理中被误杀后，TSF fail-open 英文直传被误读为组合输入；重启安装版 0.5.4 Server 并完成部署后档案激活恢复正常；
-- 安装版候选上屏验收（输入拼音、提交 `〔项目·术语〕` 候选）只剩一次交互观察：因用户转入全屏 RDP 会话，合成按键有打进远程机器的风险，本轮刻意中止；`M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = REAL_WINDOWS_VERIFICATION_REQUIRED`。
+- `0.5.4-preview` 已由用户完成覆盖安装并重启；登录桌面上已验证：真实 Adapter 采集进安装版服务（同一工作区路径得到同一匿名 ID）、管理器添加术语落盘 `term/manual`、管理器删除词条把被误加术语的真实词库恢复到字节级一致（SHA-256 前后相同）、整库删除回归通过；
+- **安装版候选上屏验收已通过**：隔离 smoke 工作区由真实 Adapter 采集后，租约活跃期间经 CIPM `UPSERT_TERM` 注入 `CeShiShuYu`，app-smoke 在 TypeScript 注释行输入拼音，候选窗口第一项为 `CeShiShuYu 〔项目·术语〕`，空格上屏后编辑器以 `// CeShiShuYu` 结尾（91,899 像素候选窗变化 + 截图证据）；smoke 的词库等待谓词同步演进为同时接受 `language_server` 与 `manual` 来源；测试工作区与词库已全部经 CIPM `REMOVE_PROJECT` 清理；
+- 会话中诊断出早前"无候选"观察的根因链：ContextIME TSF Server 被 smoke 超时逻辑反复误杀（`/nascii` 子进程在实例发现失败时会变成新 Server，被超时逻辑击杀）、UNICODE 直插字符天然绕过 IME 管线、M3 注释→中文自动切换仍是未验证欠账（本次通过 M5.3 时代的手动强制中文路径完成验收）；
+- 证据：`docs/evidence/m5-approved-terms-host-verification.md`；状态：`M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = VERIFIED`；
+- 安装器强制重启问题（升级路径无条件 `SetRebootFlag true`）记录为 0.5.5 任务：改为显式提示并评估免重启升级。
 
 ## M6：个人习惯
 

@@ -18,16 +18,15 @@ desktop with the installed `0.5.4-preview` package (in-place upgraded from
         → real dictionary restored byte-identical (SHA-256 verified)
 ```
 
-The remaining open step is narrower than before: with the ContextIME profile
-active and the 0.5.4 server freshly restarted, typing `ceshishuyu` in the
-target editor and committing `CeShiShuYu 〔项目·术语〕` still needs one
-interactive observation. The first attempts were invalidated by a dead
-ContextIME TSF server (fail-open English passthrough mistaken for
-composition), which was diagnosed and fixed during the session.
+The complete candidate path was then verified end to end on the installed
+package: a fresh smoke workspace was ingested by the real Adapter, the
+user-approved term was injected through the bounded `CIPM` `UPSERT_TERM`
+op while the workspace lease was live, and the app-smoke observed the
+candidate window and committed the term inside a TypeScript comment.
 
 ```text
 M5.5_MANAGEMENT_PATH_INSTALLED = VERIFIED
-M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = REAL_WINDOWS_VERIFICATION_REQUIRED
+M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = VERIFIED
 ```
 
 ## Fixed product and build
@@ -82,34 +81,63 @@ rebooted; the `0.5.3-preview` install leaf was replaced by
    smoke confirms the ContextIME profile activates
    (`ProfileActivationHResult = 0x0`).
 
-## Not completed in this session
+## Installed candidate acceptance (final pass)
 
-- **Candidate commit observation.** Typing `ceshishuyu` under the active
-  ContextIME profile with the workspace lease live and committing
-  `CeShiShuYu 〔项目·术语〕` still requires one interactive desktop check.
-  The session was interrupted twice for safety: first because the user moved
-  into a full-screen RDP session (synthetic keys could reach the remote
-  machine), then again for the same reason. The manual-term record is
-  already persisted in the target project dictionary, so the remaining step
-  is a single typing observation on a free desktop.
+The `vscode-project-candidate` app-smoke scenario was run against the
+installed 0.5.4 package with `--input ceshishuyu --expected CeShiShuYu`:
 
-  Additional diagnoses collected for that final pass:
+```text
+smoke workspace (isolated VS Code + report-only 0.5.0 adapter)
+        → Language Server symbols ingested (b816-style fresh project)
+        → CIPM UPSERT_TERM "CeShiShuYu" while the lease was live
+        → persisted as term/manual with server-owned last_seen
+        → smoke waits for the persisted symbol, then types in the comment
+        → candidate window: 1. CeShiShuYu 〔项目·术语〕
+        → space commits; editor ends with "// CeShiShuYu"
+```
 
-  - The driver tooling must send virtual-key events (the app-smoke
-    `TypeAscii` approach); `KEYEVENTF_UNICODE`-style text injection bypasses
-    the IME pipeline entirely and always produces raw text, which invalidated
-    several early observations.
-  - The TSF smoke confirms ContextIME composition, candidates, and commit
-    work end-to-end in its own window (`shurufa → 输入法`, `Passed = true`)
-    after the server restart, so the server-side pipeline is healthy.
-  - VS Code typing stayed raw even with virtual-key events, including inside
-    a real `//` comment line. The editor-context decision mapping
-    (`Comment → Chinese`) exists in the Context Service, but the M3
-    "real TSF automatic switching" loop has never been verified on a real
-    desktop (`REAL_WINDOWS_VERIFICATION_REQUIRED` from M3), so the comment
-    context may not be applied to the live session yet. The next pass should
-    either confirm the automatic comment switch or force Chinese mode
-    manually before typing.
+Evidence (artifacts of this session):
+
+- Evidence JSON: `Passed = true`, `CandidateWindowDetected = true`
+  (91,899 changed pixels), `ProjectCandidateCommitMatched = true`,
+  final editor text ends with `// CeShiShuYu`;
+- Candidate screenshot: the first candidate is
+  `CeShiShuYu 〔项目·术语〕` followed by ordinary librime candidates
+  (测试属于 / 测试 / 侧室 / 侧视);
+- `m55-installed-acceptance2.json` and
+  `m55-installed-acceptance2.json.project-candidate.png` under
+  `artifacts/contextime-0.5.4-staged/`.
+
+Two test-harness changes were required and are part of this change set:
+
+- The app-smoke dictionary wait was hard-coded to
+  `	language_server	<symbolHex>`; it now also accepts
+  `	manual	<symbolHex>` so user-approved terms can drive the scenario.
+- The term was delivered through a minimal CIPM client (the same bounded
+  frame the manager uses) while the lease was live; the UPSERT_TERM publish
+  path then propagated the snapshot to the candidate transport within the
+  500 ms worker fetch.
+
+All test workspaces and their dictionaries were removed afterwards through
+CIPM `REMOVE_PROJECT`; only the user's real dictionary
+(`e37d5123…`, SHA-256 unchanged) remains.
+
+## Session diagnostics (recorded for future work)
+
+- The ContextIME TSF server died repeatedly during this session. Each
+  `/nascii` "hang" was actually a command child becoming a replacement
+  server (the running instance was not found); the smoke's 5-second timeout
+  then killed that fresh server. After the final clean start the server
+  stayed healthy, but the instance-discovery failure behind the hang is
+  worth investigating.
+- `KEYEVENTF_UNICODE`-style text injection bypasses the IME pipeline
+  entirely and always yields raw text; drivers must send virtual-key events
+  (the app-smoke `TypeAscii` approach).
+- VS Code typing stayed raw even with virtual keys while the editor context
+  pipeline was not feeding decisions; the M3 "real TSF automatic switching"
+  loop (comment → Chinese) has never been verified on a real desktop
+  (`REAL_WINDOWS_VERIFICATION_REQUIRED` from M3). The M5.3-era manual force
+  (`/nascii`) plus the manual-origin guard remains the working path.
 - **Installer reboot behavior.** The NSIS script sets `SetRebootFlag true`
   unconditionally on the upgrade path, which forced the reboot the user
   experienced after installing 0.5.4. Recorded as a 0.5.5 installer task:
