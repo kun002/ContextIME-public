@@ -18,6 +18,10 @@ constexpr std::size_t kPageSizeOffset = 18;
 constexpr std::size_t kProjectIdOffset = 20;
 constexpr std::size_t kCursorOffset = 36;
 constexpr std::size_t kRequestDataOffset = 40;
+constexpr std::size_t kRequestEntryLengthOffset = 40;
+constexpr std::size_t kRequestEntryTypeOffset = 42;
+constexpr std::size_t kRequestEntrySourceOffset = 43;
+constexpr std::size_t kRequestEntrySymbolOffset = 44;
 constexpr std::size_t kResponseCountOffset = 18;
 constexpr std::size_t kTotalCountOffset = 20;
 constexpr std::size_t kNextCursorOffset = 24;
@@ -106,7 +110,7 @@ bool IsAllZero(const std::uint8_t* begin, const std::uint8_t* end) noexcept {
 
 bool IsKnown(Operation operation) noexcept {
   return operation >= Operation::ListProjects &&
-         operation <= Operation::RemoveProject;
+         operation <= Operation::RemoveEntry;
 }
 
 bool IsKnown(ProjectSymbolType type) noexcept {
@@ -148,6 +152,16 @@ bool ValidateRequestFields(const ManagementRequest& request) noexcept {
     case Operation::RemoveProject:
       return !request.enabled && request.page_size == 0 &&
              request.cursor == 0;
+    case Operation::UpsertTerm:
+      return !IsZeroProjectId(request.project_id) && !request.enabled &&
+             request.page_size == 0 && request.cursor == 0 &&
+             request.entry.symbol_type == ProjectSymbolType::Term &&
+             request.entry.source == ProjectSymbolSource::Manual &&
+             IsValidProjectDictionaryEntry(request.entry);
+    case Operation::RemoveEntry:
+      return !IsZeroProjectId(request.project_id) && !request.enabled &&
+             request.page_size == 0 && request.cursor == 0 &&
+             IsValidProjectDictionaryEntry(request.entry);
   }
   return false;
 }
@@ -204,6 +218,17 @@ CodecStatus EncodeRequest(const ManagementRequest& request,
   std::copy(request.project_id.begin(), request.project_id.end(),
             frame.begin() + kProjectIdOffset);
   WriteU32(frame.data() + kCursorOffset, request.cursor);
+  if (request.operation == Operation::UpsertTerm ||
+      request.operation == Operation::RemoveEntry) {
+    WriteU16(frame.data() + kRequestEntryLengthOffset,
+             static_cast<std::uint16_t>(request.entry.symbol.size()));
+    frame[kRequestEntryTypeOffset] =
+        static_cast<std::uint8_t>(request.entry.symbol_type);
+    frame[kRequestEntrySourceOffset] =
+        static_cast<std::uint8_t>(request.entry.source);
+    std::copy(request.entry.symbol.begin(), request.entry.symbol.end(),
+              frame.begin() + kRequestEntrySymbolOffset);
+  }
   return CodecStatus::Ok;
 }
 
@@ -213,12 +238,7 @@ CodecStatus DecodeRequest(const RequestFrame& frame,
       frame, MessageType::Request,
       static_cast<std::uint32_t>(kRequestPayloadSize));
   if (header != CodecStatus::Ok) return header;
-  if (!IsAllZero(frame.data() + kRequestDataOffset,
-                 frame.data() + frame.size()) ||
-      frame[kEnabledOffset] > 1u) {
-    return frame[kEnabledOffset] > 1u ? CodecStatus::InvalidField
-                                     : CodecStatus::NonZeroReserved;
-  }
+  if (frame[kEnabledOffset] > 1u) return CodecStatus::InvalidField;
   try {
     ManagementRequest decoded;
     decoded.request_id = ReadRequestId(frame);
@@ -229,6 +249,32 @@ CodecStatus DecodeRequest(const RequestFrame& frame,
               frame.begin() + kProjectIdOffset + decoded.project_id.size(),
               decoded.project_id.begin());
     decoded.cursor = ReadU32(frame.data() + kCursorOffset);
+    if (decoded.operation == Operation::UpsertTerm ||
+        decoded.operation == Operation::RemoveEntry) {
+      const std::size_t symbol_size =
+          ReadU16(frame.data() + kRequestEntryLengthOffset);
+      decoded.entry.symbol_type =
+          static_cast<ProjectSymbolType>(frame[kRequestEntryTypeOffset]);
+      decoded.entry.source =
+          static_cast<ProjectSymbolSource>(frame[kRequestEntrySourceOffset]);
+      // The request carries no frequency: the server owns observation state
+      // and treats a repeated term as a monotonic refresh.
+      decoded.entry.frequency = 1;
+      if (symbol_size == 0 || symbol_size > kMaximumProjectSymbolBytes ||
+          kRequestEntrySymbolOffset + symbol_size > frame.size()) {
+        return CodecStatus::InvalidField;
+      }
+      const auto* symbol = frame.data() + kRequestEntrySymbolOffset;
+      decoded.entry.symbol.assign(reinterpret_cast<const char*>(symbol),
+                                  symbol_size);
+      if (!IsAllZero(frame.data() + kRequestEntrySymbolOffset + symbol_size,
+                     frame.data() + frame.size())) {
+        return CodecStatus::NonZeroReserved;
+      }
+    } else if (!IsAllZero(frame.data() + kRequestDataOffset,
+                          frame.data() + frame.size())) {
+      return CodecStatus::NonZeroReserved;
+    }
     if (!ValidateRequestFields(decoded)) return CodecStatus::InvalidField;
     request = std::move(decoded);
     return CodecStatus::Ok;
@@ -398,6 +444,8 @@ const char* ToString(Operation operation) noexcept {
     case Operation::ViewProject: return "VIEW_PROJECT";
     case Operation::SetEnabled: return "SET_ENABLED";
     case Operation::RemoveProject: return "REMOVE_PROJECT";
+    case Operation::UpsertTerm: return "UPSERT_TERM";
+    case Operation::RemoveEntry: return "REMOVE_ENTRY";
   }
   return "UNKNOWN";
 }
