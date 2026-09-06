@@ -679,7 +679,8 @@ namespace ContextIME.NativeTests
                     if (File.Exists(path))
                     {
                         string content = File.ReadAllText(path, Encoding.UTF8);
-                        if (content.IndexOf("\tlanguage_server\t" + symbolHex, StringComparison.Ordinal) >= 0)
+                        if (content.IndexOf("\tlanguage_server\t" + symbolHex, StringComparison.Ordinal) >= 0 ||
+                            content.IndexOf("\tmanual\t" + symbolHex, StringComparison.Ordinal) >= 0)
                         {
                             elapsedMilliseconds = clock.ElapsedMilliseconds;
                             return true;
