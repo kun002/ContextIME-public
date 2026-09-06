@@ -55,8 +55,10 @@ void ActiveProjectSnapshotCache::Publish(
       std::vector<const ProjectDictionaryEntry*> ordered;
       ordered.reserve(dictionary.entries.size());
       for (const auto& entry : dictionary.entries) {
-        // M5.3 bridges only the already-approved M5.2 Language Server source.
-        if (entry.source == ProjectSymbolSource::LanguageServer &&
+        // Only approved sources reach candidates: M5.2 Language Server symbols
+        // and M5.5 user-approved manual terms added through the manager.
+        if ((entry.source == ProjectSymbolSource::LanguageServer ||
+             entry.source == ProjectSymbolSource::Manual) &&
             IsValidProjectDictionaryEntry(entry)) {
           ordered.push_back(&entry);
         }

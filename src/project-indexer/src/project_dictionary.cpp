@@ -494,6 +494,60 @@ ProjectDictionaryStatus ProjectDictionaryStore::Upsert(
   }
 }
 
+ProjectDictionaryStatus ProjectDictionaryStore::RemoveEntry(
+    const std::string& project_id, const ProjectDictionaryEntry& entry,
+    std::shared_ptr<const ProjectDictionarySnapshot>* persisted_snapshot) noexcept {
+  if (persisted_snapshot != nullptr) {
+    persisted_snapshot->reset();
+  }
+  if (!IsValidProjectId(project_id)) {
+    return ProjectDictionaryStatus::InvalidProjectId;
+  }
+  if (!IsValidProjectDictionaryEntry(entry)) {
+    return ProjectDictionaryStatus::InvalidEntry;
+  }
+
+  try {
+    ProjectDictionarySnapshot snapshot;
+    if (!TryLoadCached(project_id, snapshot)) {
+      const ProjectDictionaryStatus load_status = Load(project_id, snapshot);
+      if (load_status != ProjectDictionaryStatus::Ok) {
+        return load_status;
+      }
+    }
+    if (!snapshot.exists) {
+      // Removing from a project without a dictionary is idempotent; the caller
+      // decides whether a missing project deserves a NotFound diagnostic.
+      return ProjectDictionaryStatus::Ok;
+    }
+    const EntryKey key = MakeKey(entry);
+    std::vector<ProjectDictionaryEntry> remaining;
+    remaining.reserve(snapshot.entries.size());
+    for (auto& candidate : snapshot.entries) {
+      if (MakeKey(candidate) != key) {
+        remaining.push_back(std::move(candidate));
+      }
+    }
+    snapshot.entries = std::move(remaining);
+    snapshot.exists = true;
+    auto persisted =
+        std::make_shared<ProjectDictionarySnapshot>(std::move(snapshot));
+    const ProjectDictionaryStatus save_status = Save(project_id, *persisted);
+    if (save_status == ProjectDictionaryStatus::Ok) {
+      CacheSnapshot(persisted);
+      if (persisted_snapshot != nullptr) {
+        *persisted_snapshot = std::move(persisted);
+      }
+    }
+    return save_status;
+  } catch (...) {
+    if (persisted_snapshot != nullptr) {
+      persisted_snapshot->reset();
+    }
+    return ProjectDictionaryStatus::IoError;
+  }
+}
+
 ProjectDictionaryStatus ProjectDictionaryStore::SetEnabled(
     const std::string& project_id, bool enabled) noexcept {
   ProjectDictionarySnapshot snapshot;

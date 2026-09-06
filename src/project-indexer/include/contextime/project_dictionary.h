@@ -78,6 +78,13 @@ class ProjectDictionaryStore final {
 
   ProjectDictionaryStatus SetEnabled(const std::string& project_id,
                                      bool enabled) noexcept;
+  // Removes the single entry keyed by symbol/type/source. Removing an absent
+  // key succeeds without touching the file; the optional out-parameter receives
+  // the exact persisted snapshot after a successful save.
+  ProjectDictionaryStatus RemoveEntry(
+      const std::string& project_id, const ProjectDictionaryEntry& entry,
+      std::shared_ptr<const ProjectDictionarySnapshot>* persisted_snapshot =
+          nullptr) noexcept;
   ProjectDictionaryStatus Remove(const std::string& project_id) noexcept;
   ProjectDictionaryStatus ListProjects(
       std::vector<std::string>& project_ids) const noexcept;
