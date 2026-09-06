@@ -3,26 +3,30 @@
 ## Conclusion
 
 The M5.5 manual-term path was exercised on the real, logged-in Windows 11
-desktop with the CI-built `0.5.4-preview` service and manager binaries
-(staged, not installed). The complete management path passed:
+desktop with the installed `0.5.4-preview` package (in-place upgraded from
+0.5.3, reboot completed by the user). The management path is fully verified:
 
 ```text
 0.5.4 manager 添加术语 (real UI click)
         → bounded CIPM UPSERT_TERM
-        → staged 0.5.4 Context Service Project Indexer owner
+        → installed 0.5.4 Context Service Project Indexer owner
         → persisted term/manual record with server-owned last_seen
-        → manager view refresh (2 → 3 entries)
+        → manager view refresh
+0.5.4 manager 删除词条 (real UI click)
+        → bounded CIPM REMOVE_ENTRY
+        → exact-key single-entry removal
+        → real dictionary restored byte-identical (SHA-256 verified)
 ```
 
-A real VS Code report-only Adapter also ingested fresh Language Server
-symbols into the same staged 0.5.4 service, and both original
-`language_server` records stayed byte-identical. The unrelated real project
-dictionary kept its exact SHA-256 across the entire session, and the test
-project was removed afterwards through the manager's confirmed whole-library
-delete.
+The remaining open step is narrower than before: with the ContextIME profile
+active and the 0.5.4 server freshly restarted, typing `ceshishuyu` in the
+target editor and committing `CeShiShuYu 〔项目·术语〕` still needs one
+interactive observation. The first attempts were invalidated by a dead
+ContextIME TSF server (fail-open English passthrough mistaken for
+composition), which was diagnosed and fixed during the session.
 
 ```text
-M5.5_STAGED_DESKTOP_MANAGEMENT = VERIFIED
+M5.5_MANAGEMENT_PATH_INSTALLED = VERIFIED
 M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = REAL_WINDOWS_VERIFICATION_REQUIRED
 ```
 
@@ -30,7 +34,7 @@ M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = REAL_WINDOWS_VERIFICATION_REQUIRED
 
 | Item | Value |
 |---|---|
-| Product | `ContextIME 0.5.4-preview` (CI-built, staged) |
+| Product | `ContextIME 0.5.4-preview` (installed, in-place over 0.5.3) |
 | Installer bytes | `12,299,493` |
 | Installer SHA-256 | `eed498b66b00cb4932df36cd09005f559cdfafe53802a067ea57d5dee004e37b` |
 | Context Service SHA-256 | `212c0ebd00a1d2a042fdf02ffc230767ecfa9b52b9eb5b5bb7eee79520e71d2e` |
@@ -38,54 +42,57 @@ M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = REAL_WINDOWS_VERIFICATION_REQUIRED
 | Installer CI run | [34008448679](https://github.com/kun002/ContextIME-public/actions/runs/34008448679) |
 | Weasel commit | `9cc96e20dc71b80876b12f689bb5863c76c2a7ed` |
 | librime commit | `1c23358157934bd6e6d6981f0c0164f05393b497` |
-| OS | Windows 11 Professional x64, build `26200` |
+| OS | Windows 11 Professional x64, build `26200.9168` |
 
 All three hashes were recomputed locally from the downloaded artifact and
-matched the generated manifest. The installer itself was not executed: the
-elevation prompt was dismissed, so the verification ran the CI-built service
-and manager binaries from a staged directory with unchanged ContextIME
-identity (same pipes, mutexes, and data root).
+matched the generated manifest. The user completed the in-place upgrade and
+rebooted; the `0.5.3-preview` install leaf was replaced by
+`contextime-0.5.4-preview` and the autorun services came back healthy.
 
 ## Verified on the real desktop
 
-1. **Staged 0.5.4 service lifecycle.** After quitting the installed 0.5.3
-   Context Service through its documented `--quit`, the staged 0.5.4 binary
-   bound `ContextIME.ContextService.v1`, `ContextIME.ProjectIndexer.v1`, and
-   `ContextIME.ProjectCandidate.v1` on the logged-in desktop.
-2. **Real Adapter ingestion into 0.5.4.** A real VS Code window with the
-   isolated report-only `0.5.0` VSIX and a fresh TypeScript workspace
-   published `AcceptanceController` (class) and `runAcceptance` (method)
-   into a new project dictionary `12646ea4563df944ed5c60858d006cf7.dict`
-   through the staged 0.5.4 service.
-3. **Manager add-term (M5.5 core).** The 0.5.4 manager listed the new
-   project, and a real 添加术语 click with `CeShiShuYu` produced:
-   - persisted record `term 1 1788666759213 manual 43655368695368755975`
-     (UTF-8 `CeShiShuYu`) in the project dictionary;
-   - both prior `language_server` records unchanged, including their
-     original `last_seen` values;
-   - manager view refreshed from `2 个词条` to `3 个词条` with the new row
-     showing `term / manual / 1`, and the term input cleared.
-4. **M5.4 regression.** The manager's confirmed whole-library delete still
-   works on 0.5.4: the test project was removed after the confirmation
-   dialog and the dictionaries directory returned to exactly the user's
-   real dictionary.
-5. **No disturbance to user data.** The real project dictionary
-   `e37d5123336bb193cf26efc9ff1a31bc.dict` kept SHA-256
-   `5c9441309c389d311a300613c1234578634fc405955b31555e820dfda06da3cd`
-   before and after the entire session.
-6. **Environment restored.** The staged service was quit, the installed
-   0.5.3 Context Service restarted (all three pipes re-verified), the
-   staged manager closed, and the ContextIME TSF server restarted.
+1. **Installed 0.5.4 service lifecycle after reboot.** The installed
+   Context Service owns `ContextIME.ContextService.v1`,
+   `ContextIME.ProjectIndexer.v1`, and `ContextIME.ProjectCandidate.v1`
+   after the reboot; the TSF input pipe returns once the server starts.
+2. **Real Adapter ingestion into installed 0.5.4.** A real VS Code window
+   with the report-only `0.5.0` adapter re-created project dictionary
+   `12646ea4563df944ed5c60858d006cf7.dict` (same opaque ID for the same
+   workspace path, confirming path-domain determinism) with
+   `AcceptanceController` (class) and `runAcceptance` (method).
+3. **Manager add-term (M5.5 core).** A real 添加术语 click with `CeShiShuYu`
+   produced the persisted record
+   `term 1 1788671209448 manual 43655368695368755975` with server-owned
+   `last_seen`; prior `language_server` records stayed byte-identical.
+4. **Manager single-entry removal (M5.5).** After the term was accidentally
+   added to the real project dictionary `e37d5123…` (manager auto-selection
+   race during the test), the 删除词条 flow with its confirmation removed
+   exactly the `term/manual CeShiShuYu` key. The real dictionary returned to
+   SHA-256 `5c9441309c389d311a300613c1234578634fc405955b31555e820dfda06da3cd`
+   — byte-identical to its pre-test state, proving add and remove are exact
+   inverses on persisted data.
+5. **M5.4 regression (staged pass).** The confirmed whole-library delete was
+   exercised earlier in the session against the staged 0.5.4 binaries and
+   cleared the test project as expected.
+6. **Root cause of the earlier "no candidates" observations.** The
+   ContextIME TSF server process had died during earlier smoke timeouts; the
+   TSF fail-open path then produced raw English passthrough whose VS Code
+   spell-check underline was mistaken for IME composition. After restarting
+   the installed 0.5.4 server and letting librime deploy complete, the TSF
+   smoke confirms the ContextIME profile activates
+   (`ProfileActivationHResult = 0x0`).
 
 ## Not completed in this session
 
-- **Installed candidate commit.** Typing `ceshishuyu` in a real editor and
-  committing `CeShiShuYu 〔项目·术语〕` through the installed package remains
-  open. The app-smoke driver could not pass its `/nascii` Chinese-mode
-  handshake against the installed 0.5.3 server in this session state (the
-  handshake process never exited within 5 seconds), and synthetic Shift /
-  Ctrl+Space did not toggle IME modes for manual typing. This step needs the
-  installed 0.5.4 package and a controlled interactive desktop session.
-- **In-place 0.5.4 upgrade.** The verified installer was not executed
-  because the UAC elevation prompt requires an interactive user; it can be
-  installed directly to close the installed acceptance.
+- **Candidate commit observation.** Typing `ceshishuyu` under the active
+  ContextIME profile with the workspace lease live and committing
+  `CeShiShuYu 〔项目·术语〕` still requires one interactive desktop check.
+  The session was interrupted because the user moved into a full-screen RDP
+  session; sending synthetic keys into a full-screen RDP desktop risks
+  typing into the remote machine, so the check was deliberately deferred.
+  The manual-term record is already persisted in the target project
+  dictionary, so the check is a single typing observation.
+- The earlier installer-forced-restart behavior (reboot flag set on the
+  upgrade path in the NSIS script) is recorded as a separate installer
+  improvement task: prompt instead of forcing, and evaluate whether the
+  reboot can be avoided for same-data-layout upgrades.

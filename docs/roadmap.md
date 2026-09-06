@@ -371,8 +371,9 @@ M5.5 用户批准术语当前边界：
 - active-project snapshot 发布过滤器从仅 `language_server` 扩展为 `language_server + manual`，手动术语沿 M5.3 桥接进入候选并显示 `〔项目·术语〕`；
 - 中文词语当前不会由拼音前缀命中（需后续 pinyin 标注）；`UPSERT_TERM` 不能创建不存在的项目词库；
 - CI 证据：见 `docs/evidence/m5-approved-terms-ci.md`（私有仓库 Actions 因账单暂停，构建与测试由 ContextIME-public 镜像 CI 完成）；
-- `0.5.4-preview` 暂存（未安装）服务与 CI 构建管理器已在登录桌面完成：真实 Adapter 采集进 0.5.4 服务、管理器添加术语落盘 `term/manual`、视图 2→3、既有 `language_server` 记录字节不变、整库删除回归、真实词库 SHA-256 全程不变；证据见 `docs/evidence/m5-approved-terms-host-verification.md`；
-- 安装版候选上屏验收（输入拼音、提交 `〔项目·术语〕` 候选）仍未完成：本次会话 app-smoke 的 `/nascii` 中文模式握手对已安装 0.5.3 服务持续超时，且 UAC 提权需交互确认；`M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = REAL_WINDOWS_VERIFICATION_REQUIRED`。
+- `0.5.4-preview` 已由用户完成覆盖安装并重启；登录桌面上已验证：真实 Adapter 采集进安装版服务（同一工作区路径得到同一匿名 ID）、管理器添加术语落盘 `term/manual`、管理器删除词条把被误加术语的真实词库恢复到字节级一致（SHA-256 前后相同）、整库删除回归通过；证据见 `docs/evidence/m5-approved-terms-host-verification.md`；
+- 会话中诊断出早前"无候选"观察的根因：ContextIME TSF Server 在 smoke 超时处理中被误杀后，TSF fail-open 英文直传被误读为组合输入；重启安装版 0.5.4 Server 并完成部署后档案激活恢复正常；
+- 安装版候选上屏验收（输入拼音、提交 `〔项目·术语〕` 候选）只剩一次交互观察：因用户转入全屏 RDP 会话，合成按键有打进远程机器的风险，本轮刻意中止；`M5.5_INSTALLED_CANDIDATE_ACCEPTANCE = REAL_WINDOWS_VERIFICATION_REQUIRED`。
 
 ## M6：个人习惯
 
