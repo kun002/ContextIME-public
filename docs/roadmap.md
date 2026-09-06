@@ -302,6 +302,7 @@ M4.2 设计：[`docs/vscode-adapter.md`](vscode-adapter.md)。验证证据：[`d
 - [ ] 增量更新资源名和用户批准的技术术语。
 - [x] 提供词库查看、删除和禁用。
 - [x] M5.3 在候选窗口以 `〔项目·类型〕` 标记项目候选来源。
+- [x] M5.5 用户手动批准术语进入项目词库与候选（资源名等待后续有界 source）。
 - [x] M5.2 协议不承载或保存完整源码、URI、workspace 路径、range、detail、container、Token 或环境变量值。
 - [x] 大项目索引不阻塞输入。
 
@@ -361,6 +362,15 @@ M5.4 管理入口当前边界：
 - Build commit：`48740cfa6158d7334ef5d8c21e1f8613f59c704a`，公开 Preview run `33876802484`；
 - 证据：[`docs/evidence/m5-project-dictionary-management-host-verification.md`](evidence/m5-project-dictionary-management-host-verification.md)；
 - 状态：`M5.4_PROJECT_DICTIONARY_MANAGEMENT = VERIFIED`。干净机、LAN、RDP 和其他 Language Server 仍未验证。
+
+M5.5 用户批准术语当前边界：
+
+- `CIPM` 增加 `UPSERT_TERM / REMOVE_ENTRY`：管理窗口以 `term / manual` 固定来源写入选中既有项目，或按完整键删除单条词条；request 数据区承载 `symbol/type/source`，frequency 和 last_seen 由 server 拥有，重复添加为单调刷新；
+- Store 增加 `RemoveEntry`：精确键删除、幂等、与 immutable 缓存一致；
+- active-project snapshot 发布过滤器从仅 `language_server` 扩展为 `language_server + manual`，手动术语沿 M5.3 桥接进入候选并显示 `〔项目·术语〕`；
+- 中文词语当前不会由拼音前缀命中（需后续 pinyin 标注）；`UPSERT_TERM` 不能创建不存在的项目词库；
+- CI 证据：见 `docs/evidence/m5-approved-terms-ci.md`（私有仓库 Actions 因账单暂停，构建与测试由 ContextIME-public 镜像 CI 完成）；
+- 安装版真机验收（从开始菜单管理器添加术语并在真实候选窗口提交）仍未完成，需随下一个预览包关闭。
 
 ## M6：个人习惯
 

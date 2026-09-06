@@ -5,6 +5,10 @@
 M5.1 建立可独立验证的本地项目词库 core。M5.2 增加 VS Code Language Server symbol 到 Context Service 的有界后台写入链路。M5.3 只把这些已经批准并持久化的 Language Server symbol 接入当前项目的 librime 候选，不增加新数据源。
 M5.4 在相同 Project Indexer 后台 owner 上增加查看、启用、禁用和整库删除入口；
 协议和 UI 边界见 [`project-dictionary-management.md`](project-dictionary-management.md)。
+M5.5 增加用户手动批准的术语入口：管理窗口通过 `CIPM` 的
+`UPSERT_TERM / REMOVE_ENTRY` 以 `term / manual` 固定来源写入选中项目或删除
+单条记录，active-project snapshot 发布过滤器同步扩展到 `manual` 来源，
+手动术语沿用 M5.3 候选桥接并标记 `〔项目·术语〕`。
 
 ```text
 VS Code document symbol provider
@@ -211,3 +215,19 @@ active-project immutable snapshot；管理调用失败不影响普通拼音输�
 
 状态：`M5.4_PROJECT_DICTIONARY_MANAGEMENT = VERIFIED`。干净机、LAN 和 RDP
 仍为 `REAL_WINDOWS_VERIFICATION_REQUIRED`。
+
+## M5.5 用户批准术语
+
+手动术语沿用 Project Dictionary 单 owner 与 immutable snapshot 模型：
+
+- 来源固定 `manual`、类型固定 `term`，只接受既有 Store 校验（合法 UTF-8、
+  无控制字符/路径分隔符、最多 128 bytes、单项目 100,000 条上限）；
+- `UPSERT_TERM` 只作用于已存在的项目词库，重复添加为单调刷新；
+- `REMOVE_ENTRY` 按 `symbol + symbol_type + source` 精确删除，幂等；
+- active-project 发布过滤器扩展为 `language_server + manual`；发布、排序、
+  256 条/24 KiB 上限和按 symbol 去重规则与 M5.3 完全一致；
+- 手动术语不进入 Adapter 采集路径，不改变按键热路径；管理调用失败仍只
+  显示诊断，普通输入不受影响。
+
+边界：中文词语不会由拼音前缀命中（需后续 pinyin 标注）；频次在 M6 学习
+接入前固定；安装版真机验收在 CI 与新预览包完成后单独关闭。
