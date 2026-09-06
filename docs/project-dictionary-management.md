@@ -120,4 +120,8 @@ M5.5 在不新增 pipe、不改变 `CIPD` Adapter 路径的前提下，把“用
 - 手动术语按原始 UTF-8 前缀匹配拼音输入串；英文标识符和术语可直接前缀
   命中，中文词语不会由拼音前缀命中，需要后续 pinyin 标注支持；
 - `UPSERT_TERM` 不能创建不存在的项目词库；
-- CI 编译/单测与安装版真机验收状态见 roadmap M5.5 小节。
+- CI 编译/单测见 [`evidence/m5-approved-terms-ci.md`](evidence/m5-approved-terms-ci.md)；
+- `0.5.4-preview` 暂存服务与管理器已在登录桌面完成真实 Adapter 采集、
+  添加术语落盘、视图刷新、M5.4 整库删除回归和真实词库零扰动，见
+  [`evidence/m5-approved-terms-host-verification.md`](evidence/m5-approved-terms-host-verification.md)；
+  安装版候选上屏验收仍为 `REAL_WINDOWS_VERIFICATION_REQUIRED`。
