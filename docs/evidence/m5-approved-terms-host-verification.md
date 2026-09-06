@@ -87,12 +87,32 @@ rebooted; the `0.5.3-preview` install leaf was replaced by
 - **Candidate commit observation.** Typing `ceshishuyu` under the active
   ContextIME profile with the workspace lease live and committing
   `CeShiShuYu 〔项目·术语〕` still requires one interactive desktop check.
-  The session was interrupted because the user moved into a full-screen RDP
-  session; sending synthetic keys into a full-screen RDP desktop risks
-  typing into the remote machine, so the check was deliberately deferred.
-  The manual-term record is already persisted in the target project
-  dictionary, so the check is a single typing observation.
-- The earlier installer-forced-restart behavior (reboot flag set on the
-  upgrade path in the NSIS script) is recorded as a separate installer
-  improvement task: prompt instead of forcing, and evaluate whether the
-  reboot can be avoided for same-data-layout upgrades.
+  The session was interrupted twice for safety: first because the user moved
+  into a full-screen RDP session (synthetic keys could reach the remote
+  machine), then again for the same reason. The manual-term record is
+  already persisted in the target project dictionary, so the remaining step
+  is a single typing observation on a free desktop.
+
+  Additional diagnoses collected for that final pass:
+
+  - The driver tooling must send virtual-key events (the app-smoke
+    `TypeAscii` approach); `KEYEVENTF_UNICODE`-style text injection bypasses
+    the IME pipeline entirely and always produces raw text, which invalidated
+    several early observations.
+  - The TSF smoke confirms ContextIME composition, candidates, and commit
+    work end-to-end in its own window (`shurufa → 输入法`, `Passed = true`)
+    after the server restart, so the server-side pipeline is healthy.
+  - VS Code typing stayed raw even with virtual-key events, including inside
+    a real `//` comment line. The editor-context decision mapping
+    (`Comment → Chinese`) exists in the Context Service, but the M3
+    "real TSF automatic switching" loop has never been verified on a real
+    desktop (`REAL_WINDOWS_VERIFICATION_REQUIRED` from M3), so the comment
+    context may not be applied to the live session yet. The next pass should
+    either confirm the automatic comment switch or force Chinese mode
+    manually before typing.
+- **Installer reboot behavior.** The NSIS script sets `SetRebootFlag true`
+  unconditionally on the upgrade path, which forced the reboot the user
+  experienced after installing 0.5.4. Recorded as a 0.5.5 installer task:
+  replace the forced reboot with an explicit prompt, and evaluate whether a
+  reboot can be avoided entirely for same-layout upgrades (the versioned
+  install leaf means the new files never collide with running binaries).
