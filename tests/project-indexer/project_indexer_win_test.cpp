@@ -425,6 +425,132 @@ void TestManagementUsesIndexerOwnerAndRefreshesActiveSnapshot() {
          "remove clears storage and the active immutable snapshot");
 }
 
+void TestManualTermManagementUpdatesStoreAndActiveSnapshot() {
+  TemporaryDirectory temporary;
+  ProjectDictionaryStore store(temporary.path());
+  ActiveProjectSnapshotCache snapshot_cache;
+  const std::wstring pipe_name = UniquePipe(L"manual-term");
+  const auto upsert = Request();
+  const std::string project_id =
+      contextime::project_protocol::ProjectIdToString(upsert.project_id);
+  auto entries = upsert.entries;
+  entries[0].last_seen_ms = 100;
+  entries[1].last_seen_ms = 100;
+  Expect(store.Upsert(project_id, entries) == ProjectDictionaryStatus::Ok,
+         "manual term fixture persists two Language Server symbols");
+  ProjectDictionarySnapshot initial;
+  Expect(store.Load(project_id, initial) == ProjectDictionaryStatus::Ok,
+         "manual term fixture loads");
+  snapshot_cache.Publish(initial, GetTickCount64());
+
+  ProjectIndexerServeStatus serve_status =
+      ProjectIndexerServeStatus::SystemError;
+  contextime::management_protocol::ManagementResponse response;
+  contextime::management_protocol::ManagementRequest add;
+  add.request_id = 301;
+  add.operation = contextime::management_protocol::Operation::UpsertTerm;
+  add.project_id = upsert.project_id;
+  add.entry.symbol = "PhotonSlash";
+  add.entry.symbol_type = ProjectSymbolType::Term;
+  add.entry.source = ProjectSymbolSource::Manual;
+  add.entry.frequency = 1;
+  Expect(ManagementExchange(pipe_name, store, snapshot_cache, add, response,
+                            serve_status) &&
+             serve_status == ProjectIndexerServeStatus::Served &&
+             response.status ==
+                 contextime::management_protocol::ResponseStatus::Ok &&
+             response.exists && response.enabled &&
+             response.total_count == 3,
+         "management adds a manual term through the indexer pipe");
+  ProjectDictionarySnapshot stored;
+  Expect(store.Load(project_id, stored) == ProjectDictionaryStatus::Ok &&
+             stored.entries.size() == 3,
+         "manual term persists in the project dictionary");
+  bool manual_persisted = false;
+  for (const auto& entry : stored.entries) {
+    if (entry.symbol == "PhotonSlash") {
+      manual_persisted =
+          entry.symbol_type == ProjectSymbolType::Term &&
+          entry.source == ProjectSymbolSource::Manual &&
+          entry.frequency == 1 && entry.last_seen_ms > 0;
+    }
+  }
+  Expect(manual_persisted,
+         "manual term keeps server-owned observation state");
+  auto active = snapshot_cache.Read();
+  bool term_in_candidates = false;
+  for (const auto& candidate : active->candidates) {
+    term_in_candidates =
+        term_in_candidates ||
+        (candidate.symbol == "PhotonSlash" &&
+         candidate.symbol_type == ProjectSymbolType::Term);
+  }
+  Expect(active && active->project_id == project_id &&
+             active->candidates.size() == 3 && term_in_candidates,
+         "manual term reaches the active candidate snapshot");
+
+  add.request_id = 302;
+  Expect(ManagementExchange(pipe_name, store, snapshot_cache, add, response,
+                            serve_status) &&
+             response.status ==
+                 contextime::management_protocol::ResponseStatus::Ok &&
+             response.total_count == 3,
+         "re-adding the same manual term stays a monotonic refresh");
+
+  contextime::management_protocol::ManagementRequest missing = add;
+  missing.request_id = 303;
+  missing.project_id.fill(0xab);
+  Expect(ManagementExchange(pipe_name, store, snapshot_cache, missing,
+                            response, serve_status) &&
+             response.status ==
+                 contextime::management_protocol::ResponseStatus::NotFound,
+         "term upsert cannot create an unlisted project dictionary");
+
+  contextime::management_protocol::ManagementRequest remove_entry;
+  remove_entry.request_id = 304;
+  remove_entry.operation =
+      contextime::management_protocol::Operation::RemoveEntry;
+  remove_entry.project_id = upsert.project_id;
+  remove_entry.entry.symbol = "PhotonSlash";
+  remove_entry.entry.symbol_type = ProjectSymbolType::Term;
+  remove_entry.entry.source = ProjectSymbolSource::Manual;
+  remove_entry.entry.frequency = 1;
+  Expect(ManagementExchange(pipe_name, store, snapshot_cache, remove_entry,
+                            response, serve_status) &&
+             response.status ==
+                 contextime::management_protocol::ResponseStatus::Ok &&
+             response.exists && response.total_count == 2,
+         "management removes a single manual term");
+  active = snapshot_cache.Read();
+  term_in_candidates = false;
+  for (const auto& candidate : active->candidates) {
+    term_in_candidates = term_in_candidates || candidate.symbol == "PhotonSlash";
+  }
+  Expect(active && active->candidates.size() == 2 && !term_in_candidates,
+         "removed manual term leaves the active candidate snapshot");
+
+  contextime::management_protocol::ManagementRequest disable;
+  disable.request_id = 305;
+  disable.operation =
+      contextime::management_protocol::Operation::SetEnabled;
+  disable.project_id = upsert.project_id;
+  disable.enabled = false;
+  Expect(ManagementExchange(pipe_name, store, snapshot_cache, disable,
+                            response, serve_status) &&
+             !response.enabled,
+         "fixture disables the project");
+  add.request_id = 306;
+  add.entry.symbol = "SecondTerm";
+  Expect(ManagementExchange(pipe_name, store, snapshot_cache, add, response,
+                            serve_status) &&
+             response.status ==
+                 contextime::management_protocol::ResponseStatus::Ok &&
+             !response.enabled && response.total_count == 3,
+         "manual terms persist into a disabled project");
+  Expect(snapshot_cache.Read()->candidates.empty(),
+         "disabled project keeps an empty candidate snapshot");
+}
+
 void TestManagementRetriesPipeRecreationWindow() {
   TemporaryDirectory temporary;
   ProjectDictionaryStore store(temporary.path());
@@ -572,6 +698,7 @@ int main() {
   TestSuccessfulUpdatePersistsOnDedicatedPipe();
   TestMalformedUpdateCannotReachStore();
   TestManagementUsesIndexerOwnerAndRefreshesActiveSnapshot();
+  TestManualTermManagementUpdatesStoreAndActiveSnapshot();
   TestManagementRetriesPipeRecreationWindow();
   TestLargeManagementViewDoesNotSpendResponseIoBudgetOnStoreWork();
   TestStoreFailureIsApplicationError();

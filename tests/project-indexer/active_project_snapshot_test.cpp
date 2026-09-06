@@ -50,11 +50,16 @@ void TestBoundedLanguageServerSnapshot() {
   const auto snapshot = cache.Read();
   Expect(snapshot && snapshot->project_id == dictionary.project_id,
          "published snapshot owns only the active opaque project ID");
-  Expect(snapshot && snapshot->candidates.size() == 3,
-         "manual source and duplicate candidate text are excluded");
-  Expect(snapshot && snapshot->candidates[0].symbol == "Recent" &&
-             snapshot->candidates[1].symbol == "PlayerController" &&
-             snapshot->candidates[2].symbol == "Low",
+  Expect(snapshot && snapshot->candidates.size() == 4,
+         "approved manual terms join Language Server symbols and duplicate "
+         "candidate text is excluded");
+  Expect(snapshot && snapshot->candidates[0].symbol == "ManualOnly" &&
+             snapshot->candidates[0].symbol_type ==
+                 contextime::ProjectSymbolType::Term,
+         "user-approved manual term reaches candidates with term type");
+  Expect(snapshot && snapshot->candidates[1].symbol == "Recent" &&
+             snapshot->candidates[2].symbol == "PlayerController" &&
+             snapshot->candidates[3].symbol == "Low",
          "snapshot is ranked by frequency then recency");
   Expect(snapshot && contextime::IsActiveProjectSnapshotLive(*snapshot, 4000) &&
              !contextime::IsActiveProjectSnapshotLive(*snapshot, 4001),

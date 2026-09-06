@@ -255,13 +255,153 @@ void TestProjectIdConversionAndNames() {
          "management protocol stable names");
 }
 
+void TestTermRequestsRoundTripAndValidate() {
+  ManagementRequest upsert;
+  upsert.request_id = 40;
+  upsert.operation = Operation::UpsertTerm;
+  upsert.project_id = ProjectId(4);
+  upsert.entry.symbol = "PhotonSlash";
+  upsert.entry.symbol_type = ProjectSymbolType::Term;
+  upsert.entry.source = ProjectSymbolSource::Manual;
+  upsert.entry.frequency = 1;
+  contextime::management_protocol::RequestFrame frame;
+  Expect(contextime::management_protocol::EncodeRequest(upsert, frame) ==
+             CodecStatus::Ok,
+         "term upsert request encodes");
+  Expect(frame[40] == 11 && frame[41] == 0 && frame[42] == 9 &&
+             frame[43] == 4 && frame[44] == 'P',
+         "term upsert entry has a stable bounded request layout");
+  ManagementRequest decoded;
+  Expect(contextime::management_protocol::DecodeRequest(frame, decoded) ==
+             CodecStatus::Ok &&
+             decoded.operation == Operation::UpsertTerm &&
+             decoded.entry.symbol == "PhotonSlash" &&
+             decoded.entry.symbol_type == ProjectSymbolType::Term &&
+             decoded.entry.source == ProjectSymbolSource::Manual &&
+             decoded.entry.frequency == 1,
+         "term upsert request round-trips");
+
+  ManagementRequest utf8 = upsert;
+  utf8.request_id = 41;
+  utf8.entry.symbol = "\xe6\x9c\xaf\xe8\xaf\xad";
+  Expect(contextime::management_protocol::EncodeRequest(utf8, frame) ==
+             CodecStatus::Ok &&
+             contextime::management_protocol::DecodeRequest(frame, decoded) ==
+                 CodecStatus::Ok &&
+             decoded.entry.symbol == "\xe6\x9c\xaf\xe8\xaf\xad",
+         "UTF-8 term round-trips");
+
+  ManagementRequest bad = upsert;
+  Expect(contextime::management_protocol::EncodeRequest(bad, frame) ==
+             CodecStatus::Ok,
+         "baseline term request encodes");
+  bad.project_id.fill(0);
+  Expect(contextime::management_protocol::EncodeRequest(bad, frame) ==
+             CodecStatus::InvalidField,
+         "term upsert rejects a zero project id");
+  bad = upsert;
+  bad.entry.symbol_type = ProjectSymbolType::Class;
+  Expect(contextime::management_protocol::EncodeRequest(bad, frame) ==
+             CodecStatus::InvalidField,
+         "term upsert is locked to the term type");
+  bad = upsert;
+  bad.entry.source = ProjectSymbolSource::LanguageServer;
+  Expect(contextime::management_protocol::EncodeRequest(bad, frame) ==
+             CodecStatus::InvalidField,
+         "term upsert is locked to the manual source");
+  bad = upsert;
+  bad.entry.symbol.clear();
+  Expect(contextime::management_protocol::EncodeRequest(bad, frame) ==
+             CodecStatus::InvalidField,
+         "term upsert rejects an empty symbol");
+  bad = upsert;
+  bad.entry.symbol = "Assets/Secret.txt";
+  Expect(contextime::management_protocol::EncodeRequest(bad, frame) ==
+             CodecStatus::InvalidField,
+         "term upsert rejects path separators");
+  bad = upsert;
+  bad.entry.symbol.assign(128, 'a');
+  Expect(contextime::management_protocol::EncodeRequest(bad, frame) ==
+             CodecStatus::Ok,
+         "term upsert accepts a 128-byte symbol");
+  bad.entry.symbol.assign(129, 'a');
+  Expect(contextime::management_protocol::EncodeRequest(bad, frame) ==
+             CodecStatus::InvalidField,
+         "term upsert rejects a 129-byte symbol");
+
+  ManagementRequest remove_entry;
+  remove_entry.request_id = 42;
+  remove_entry.operation = Operation::RemoveEntry;
+  remove_entry.project_id = ProjectId(5);
+  remove_entry.entry.symbol = "PlayerController";
+  remove_entry.entry.symbol_type = ProjectSymbolType::Class;
+  remove_entry.entry.source = ProjectSymbolSource::LanguageServer;
+  remove_entry.entry.frequency = 1;
+  Expect(contextime::management_protocol::EncodeRequest(remove_entry, frame) ==
+             CodecStatus::Ok &&
+             contextime::management_protocol::DecodeRequest(frame, decoded) ==
+                 CodecStatus::Ok &&
+             decoded.operation == Operation::RemoveEntry &&
+             decoded.entry.symbol == "PlayerController" &&
+             decoded.entry.symbol_type == ProjectSymbolType::Class &&
+             decoded.entry.source == ProjectSymbolSource::LanguageServer,
+         "entry removal round-trips any keyed type and source");
+  frame[44 + remove_entry.entry.symbol.size()] = 1;
+  Expect(contextime::management_protocol::DecodeRequest(frame, decoded) ==
+             CodecStatus::NonZeroReserved,
+         "entry removal rejects nonzero bytes after the symbol");
+}
+
+void TestTermResponseShape() {
+  ManagementResponse added;
+  added.request_id = 50;
+  added.operation = Operation::UpsertTerm;
+  added.exists = true;
+  added.enabled = true;
+  added.total_count = 3;
+  contextime::management_protocol::ResponseFrame frame;
+  ManagementResponse decoded;
+  Expect(contextime::management_protocol::EncodeResponse(added, frame) ==
+             CodecStatus::Ok &&
+             contextime::management_protocol::DecodeResponse(frame, decoded) ==
+                 CodecStatus::Ok &&
+             decoded.exists && decoded.enabled &&
+             decoded.total_count == 3,
+         "term upsert response returns resulting metadata");
+  added.entries = {Entry("PlayerController", ProjectSymbolType::Class, 7, 1)};
+  Expect(contextime::management_protocol::EncodeResponse(added, frame) ==
+             CodecStatus::InvalidField,
+         "term upsert response cannot carry entries");
+
+  ManagementResponse removed;
+  removed.request_id = 51;
+  removed.operation = Operation::RemoveEntry;
+  removed.exists = true;
+  removed.enabled = false;
+  removed.total_count = 2;
+  Expect(contextime::management_protocol::EncodeResponse(removed, frame) ==
+             CodecStatus::Ok &&
+             contextime::management_protocol::DecodeResponse(frame, decoded) ==
+                 CodecStatus::Ok &&
+             decoded.operation == Operation::RemoveEntry &&
+             decoded.total_count == 2,
+         "entry removal response round-trips");
+  Expect(std::string(contextime::management_protocol::ToString(
+             Operation::UpsertTerm)) == "UPSERT_TERM" &&
+             std::string(contextime::management_protocol::ToString(
+                 Operation::RemoveEntry)) == "REMOVE_ENTRY",
+         "term operations have stable diagnostic names");
+}
+
 }  // namespace
 
 int main() {
   TestRequestOperationsAndWireLayout();
   TestMalformedRequestsAreRejected();
+  TestTermRequestsRoundTripAndValidate();
   TestListAndViewResponses();
   TestMutationAndErrorResponses();
+  TestTermResponseShape();
   TestProjectIdConversionAndNames();
   if (failures != 0) {
     std::cerr << failures << " of " << assertions << " assertions failed\n";
