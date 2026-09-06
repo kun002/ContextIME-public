@@ -3,8 +3,8 @@
   "product": {
     "name": "ContextIME",
     "channel": "preview",
-    "version": "0.5.3-preview",
-    "numericVersion": "0.5.3.0",
+    "version": "0.5.4-preview",
+    "numericVersion": "0.5.4.0",
     "publisher": "ContextIME Project",
     "homepage": "https://github.com/kun002/ContextIME-public"
   },
@@ -31,7 +31,7 @@
   },
   "directories": {
     "programRoot": "ContextIME",
-    "installLeaf": "contextime-0.5.3-preview",
+    "installLeaf": "contextime-0.5.4-preview",
     "userData": "%APPDATA%\\ContextIME",
     "log": "%TEMP%\\contextime"
   },
